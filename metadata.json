@@ -1,0 +1,5 @@
+{
+  "name": "UI-tool-new",
+  "description": "A project organized into a main folder that can be renamed. The preview window automatically detects the index file within the main folder.",
+  "requestFramePermissions": []
+}
