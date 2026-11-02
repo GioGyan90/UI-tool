@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>人物读取示例 · Lucky Break</title><link rel="stylesheet" href="./studio.css"><script type="module" src="./reader.js"></script></head>
+<body class="reader-body">
+  <header class="app-header"><a class="brand" href="./index.html"><span class="brand-mark">L<span>·</span>B</span><span>LUCKY BREAK<small>CHARACTER ATELIER</small></span></a><nav class="top-nav"><a href="./index.html">人物造型室</a><span>/</span><span>页面读取示例</span></nav><div class="header-actions"><a class="primary-button" href="./index.html" target="_blank" rel="noopener">打开造型室 ↗</a></div></header>
+  <main class="reader-main">
+    <section class="reader-preview" aria-label="由另一个页面读取的透明人物"><canvas id="reader-canvas" width="948" height="1659"></canvas></section>
+    <section class="reader-info"><p class="eyebrow">ONE CHARACTER, EVERYWHERE</p><h1>把这个角色，带到游戏里。</h1><p>这个独立页面通过同一套合成接口读取人物。你在造型室修改发型或服装后，这里会同步更新，完整立绘保持透明背景。</p><div class="reader-notice" role="status"><span class="tiny-dot"></span><span id="reader-status">正在读取人物…</span></div><div class="reader-toolbar"><button class="primary-button" id="reader-download">下载当前人物 PNG</button><button class="secondary-button" id="reader-refresh" style="width:auto;margin:0">重新读取</button></div><dl class="reader-state"><dt>画布尺寸</dt><dd>948 × 1659 · PNG</dd><dt>当前造型</dt><dd id="reader-look">—</dd><dt>更新于</dt><dd id="reader-updated">—</dd><dt>读取范围</dt><dd>同源、同一浏览器；支持页面、标签页和 iframe</dd></dl><h2>在其他页面中接入</h2><pre><code>import { loadState, renderAvatar,
+  subscribeAvatar } from './wardrobe/avatar-sdk.js';
+
+const canvas = document.querySelector('canvas');
+await renderAvatar(canvas, await loadState());
+const unsubscribe = subscribeAvatar(state =&gt;
+  renderAvatar(canvas, state));</code></pre><p>需要给 Three.js 使用时，可将合成 canvas 交给 <code>THREE.CanvasTexture</code>。跨域或跨设备接入请传入导出的配置与素材，或使用透明 PNG。</p><a href="https://github.com/GioGyan90/UI-tool/blob/main/public/wardrobe/docs/wardrobe.md" class="small-link" target="_blank" rel="noopener">查看完整素材和接口文档 ↗</a></section>
+  </main>
+</body>
+</html>

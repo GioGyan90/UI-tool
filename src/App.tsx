@@ -382,6 +382,10 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
+      <nav className="flex items-center justify-between border-b border-zinc-800 px-4 py-2 text-xs" aria-label="工具目录">
+        <span className="text-zinc-400">UI 工作台</span>
+        <a href="./wardrobe/index.html" className="rounded-md bg-emerald-800 px-4 py-2 text-emerald-50 hover:bg-emerald-700">人物造型室 · 服装与发型拆解 ↗</a>
+      </nav>
       {/* Top Section: Explorer, Editor, Preview */}
       <div className="flex-1 overflow-hidden">
         <PanelGroup direction="horizontal">

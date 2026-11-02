@@ -1,0 +1,402 @@
+{
+  "version": "2026-11-02.1",
+  "width": 948,
+  "height": 1659,
+  "characterBounds": [
+    246,
+    45,
+    482,
+    1574
+  ],
+  "slots": {
+    "hair": [
+      365,
+      45,
+      240,
+      250
+    ],
+    "body": [
+      250,
+      90,
+      465,
+      865
+    ],
+    "top": [
+      251,
+      268,
+      469,
+      600
+    ],
+    "outer": [
+      249,
+      274,
+      475,
+      920
+    ],
+    "pants": [
+      327,
+      684,
+      340,
+      808
+    ],
+    "shoes": [
+      270,
+      1448,
+      433,
+      165
+    ]
+  },
+  "bodyLongSleeveClips": [
+    [
+      380,
+      70,
+      210,
+      295
+    ],
+    [
+      245,
+      836,
+      125,
+      125
+    ],
+    [
+      587,
+      835,
+      125,
+      130
+    ]
+  ],
+  "assets": [
+    {
+      "id": "skin",
+      "kind": "body",
+      "name": "统一身体与面部",
+      "file": "./assets/skin.png",
+      "box": [
+        256,
+        93,
+        452,
+        859
+      ]
+    },
+    {
+      "id": "hair-black",
+      "kind": "hair",
+      "name": "随性中分",
+      "file": "./assets/hair-black.png",
+      "box": [
+        373,
+        53,
+        219,
+        228
+      ]
+    },
+    {
+      "id": "hair-blonde",
+      "kind": "hair",
+      "name": "鎏金微卷",
+      "file": "./assets/hair-blonde.png",
+      "box": [
+        369,
+        49,
+        229,
+        239
+      ]
+    },
+    {
+      "id": "top-tee",
+      "kind": "top",
+      "name": "纯棉圆领 T 恤",
+      "file": "./assets/top-tee.png",
+      "box": [
+        281,
+        290,
+        426,
+        414
+      ],
+      "sleeve": "short"
+    },
+    {
+      "id": "top-shirt",
+      "kind": "top",
+      "name": "休闲白衬衫",
+      "file": "./assets/top-shirt.png",
+      "box": [
+        256,
+        286,
+        452,
+        579
+      ],
+      "sleeve": "long"
+    },
+    {
+      "id": "top-turtleneck",
+      "kind": "top",
+      "name": "酒红高领针织",
+      "file": "./assets/top-turtleneck.png",
+      "box": [
+        256,
+        268,
+        452,
+        596
+      ],
+      "sleeve": "long"
+    },
+    {
+      "id": "top-formal",
+      "kind": "top",
+      "name": "礼服衬衫与马甲",
+      "file": "./assets/top-formal.png",
+      "box": [
+        256,
+        284,
+        452,
+        581
+      ],
+      "sleeve": "long"
+    },
+    {
+      "id": "outer-bomber",
+      "kind": "outer",
+      "name": "墨色飞行夹克",
+      "file": "./assets/outer-bomber.png",
+      "box": [
+        251,
+        278,
+        469,
+        583
+      ]
+    },
+    {
+      "id": "outer-field",
+      "kind": "outer",
+      "name": "橄榄绿工装夹克",
+      "file": "./assets/outer-field.png",
+      "box": [
+        251,
+        278,
+        469,
+        586
+      ]
+    },
+    {
+      "id": "outer-trench",
+      "kind": "outer",
+      "name": "驼色长风衣",
+      "file": "./assets/outer-trench.png",
+      "box": [
+        249,
+        274,
+        475,
+        920
+      ]
+    },
+    {
+      "id": "outer-blazer",
+      "kind": "outer",
+      "name": "紫藤色礼服西装",
+      "file": "./assets/outer-blazer.png",
+      "box": [
+        251,
+        277,
+        469,
+        608
+      ]
+    },
+    {
+      "id": "none",
+      "kind": "outer",
+      "name": "不穿外套",
+      "box": [
+        251,
+        278,
+        469,
+        586
+      ]
+    },
+    {
+      "id": "pants-charcoal",
+      "kind": "pants",
+      "name": "炭灰修身西裤",
+      "file": "./assets/pants-charcoal.png",
+      "box": [
+        328,
+        684,
+        338,
+        808
+      ]
+    },
+    {
+      "id": "pants-denim",
+      "kind": "pants",
+      "name": "黑色破洞牛仔裤",
+      "file": "./assets/pants-denim.png",
+      "box": [
+        327,
+        684,
+        339,
+        808
+      ]
+    },
+    {
+      "id": "pants-chino",
+      "kind": "pants",
+      "name": "橄榄棕休闲裤",
+      "file": "./assets/pants-chino.png",
+      "box": [
+        328,
+        684,
+        338,
+        808
+      ]
+    },
+    {
+      "id": "shoes-derby",
+      "kind": "shoes",
+      "name": "经典系带皮鞋",
+      "file": "./assets/shoes-derby.png",
+      "box": [
+        270,
+        1448,
+        433,
+        165
+      ]
+    },
+    {
+      "id": "shoes-sneakers",
+      "kind": "shoes",
+      "name": "黑白帆布鞋",
+      "file": "./assets/shoes-sneakers.png",
+      "box": [
+        270,
+        1448,
+        433,
+        165
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "id": "casual",
+      "number": "01",
+      "name": "日常轻装",
+      "english": "EVERYDAY EASE",
+      "layers": {
+        "hair": {
+          "id": "hair-black"
+        },
+        "top": {
+          "id": "top-tee",
+          "tint": "#625e59"
+        },
+        "outer": {
+          "id": "none"
+        },
+        "pants": {
+          "id": "pants-denim"
+        },
+        "shoes": {
+          "id": "shoes-sneakers"
+        }
+      }
+    },
+    {
+      "id": "night",
+      "number": "02",
+      "name": "夜行夹克",
+      "english": "THE NIGHT WALK",
+      "layers": {
+        "hair": {
+          "id": "hair-black"
+        },
+        "top": {
+          "id": "top-tee",
+          "tint": "#77767d"
+        },
+        "outer": {
+          "id": "outer-bomber"
+        },
+        "pants": {
+          "id": "pants-charcoal"
+        },
+        "shoes": {
+          "id": "shoes-derby"
+        }
+      }
+    },
+    {
+      "id": "field",
+      "number": "03",
+      "name": "远行工装",
+      "english": "OFF THE BEATEN PATH",
+      "layers": {
+        "hair": {
+          "id": "hair-black"
+        },
+        "top": {
+          "id": "top-shirt"
+        },
+        "outer": {
+          "id": "outer-field"
+        },
+        "pants": {
+          "id": "pants-chino"
+        },
+        "shoes": {
+          "id": "shoes-derby",
+          "tint": "#70472f"
+        }
+      }
+    },
+    {
+      "id": "trench",
+      "number": "04",
+      "name": "暖金风衣",
+      "english": "GOLDEN AFTERNOON",
+      "layers": {
+        "hair": {
+          "id": "hair-blonde"
+        },
+        "top": {
+          "id": "top-turtleneck"
+        },
+        "outer": {
+          "id": "outer-trench"
+        },
+        "pants": {
+          "id": "pants-chino",
+          "tint": "#68513d"
+        },
+        "shoes": {
+          "id": "shoes-derby",
+          "tint": "#75472d"
+        }
+      }
+    },
+    {
+      "id": "formal",
+      "number": "05",
+      "name": "紫藤礼服",
+      "english": "THE GRAND ENTRANCE",
+      "layers": {
+        "hair": {
+          "id": "hair-blonde"
+        },
+        "top": {
+          "id": "top-formal"
+        },
+        "outer": {
+          "id": "outer-blazer"
+        },
+        "pants": {
+          "id": "pants-charcoal",
+          "tint": "#b8a0d2"
+        },
+        "shoes": {
+          "id": "shoes-derby",
+          "tint": "#4b3d63"
+        }
+      }
+    }
+  ]
+}

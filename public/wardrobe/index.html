@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f5f5ef">
+  <meta name="description" content="Lucky Break 人物造型室：分层插画换装、独立换色、透明人物导出与跨页面读取。">
+  <title>人物造型室 · Lucky Break</title>
+  <link rel="stylesheet" href="./studio.css">
+  <script type="module" src="./studio.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="../" aria-label="返回 UI 工具"><span class="brand-mark">L<span>·</span>B</span><span>LUCKY BREAK<small>CHARACTER ATELIER</small></span></a>
+    <nav class="top-nav" aria-label="工具导航"><a href="../">UI 工作台</a><span>/</span><a class="active" href="./index.html">人物造型室</a></nav>
+    <div class="header-actions"><a class="text-button" href="./reader.html" target="_blank" rel="noopener"><i data-icon="external"></i><span>页面读取示例</span></a><button id="save-look" class="primary-button"><i data-icon="save"></i><span>保存造型</span></button></div>
+  </header>
+  <main class="workspace">
+    <aside class="wardrobe-panel panel">
+      <div class="panel-heading"><div><p class="eyebrow">YOUR WARDROBE</p><h1>搭配你的角色<span class="tiny-dot"></span></h1></div><button class="icon-button" id="help-open" aria-label="使用说明"><i data-icon="help"></i></button></div>
+      <div class="library-tabs" role="tablist" aria-label="素材分类" id="category-tabs"></div>
+      <div class="library-heading"><h2 id="category-title">发型</h2><span id="asset-count" class="muted"></span></div>
+      <div id="asset-grid" class="asset-grid" role="group" aria-label="选择素材"></div>
+      <div class="library-bottom"><label class="upload-button" for="asset-upload"><i data-icon="plus"></i>导入自定义 PNG<input type="file" id="asset-upload" accept="image/png" hidden></label><p>透明背景 PNG，可单独替换每个部件</p></div>
+      <div class="collection-note"><span class="collection-number">01—05</span><div>从日常，到高光时刻<small>五套造型 · 自由交叉搭配</small></div><i data-icon="sparkles"></i></div>
+    </aside>
+
+    <section class="stage-panel" aria-label="人物预览">
+      <div class="stage-heading"><div><p class="eyebrow">THE FITTING ROOM</p><h2>试衣间 <span id="look-number">LOOK 02</span></h2></div><div class="view-tabs" role="group" aria-label="预览模式"><button data-view="room" aria-pressed="true"><i data-icon="room"></i>房间</button><button data-view="transparent" aria-pressed="false"><i data-icon="grid"></i>透明</button><button data-view="layers" aria-pressed="false"><i data-icon="layers"></i>拆解</button></div></div>
+      <div class="stage room-mode" id="stage">
+        <img class="room-background" id="room-background" src="./assets/room.jpg" alt="洒着阳光的海滨公寓试衣间">
+        <div class="room-wash"></div>
+        <div class="stage-topline"><span class="stage-status"><span></span>实时合成</span><button id="reset-camera" class="stage-icon" aria-label="重置预览缩放"><i data-icon="expand"></i></button></div>
+        <div class="character-shadow"></div>
+        <div class="character-frame" id="character-frame"><canvas id="avatar-canvas" width="948" height="1659" aria-label="当前完整人物立绘"></canvas></div>
+        <div id="exploded-grid" class="exploded-grid" hidden></div>
+        <div class="stage-loading" id="stage-loading"><span class="spinner"></span><strong>正在准备试衣间</strong><span>载入分层插画…</span></div>
+        <div class="stage-bottomline"><div class="look-label"><span id="current-look-kicker">02 / THE NIGHT WALK</span><strong id="current-look-name">夜行夹克</strong></div><div class="zoom-control"><button id="zoom-out" aria-label="缩小人物"><i data-icon="minus"></i></button><span id="zoom-label">100%</span><button id="zoom-in" aria-label="放大人物"><i data-icon="plus"></i></button></div></div>
+      </div>
+      <div class="presets-heading"><span>灵感造型</span><span>选择整套，也可以混搭<i data-icon="arrow-right"></i></span></div>
+      <div class="preset-grid" id="preset-grid" aria-label="五套概念造型"></div>
+    </section>
+
+    <aside class="inspector-panel panel">
+      <div class="panel-heading compact"><div><p class="eyebrow">MAKE IT YOURS</p><h2>细节编辑</h2></div><button id="reset-layer" class="icon-button" aria-label="还原当前图层"><i data-icon="reset"></i></button></div>
+      <div class="selected-piece"><span class="piece-icon" id="piece-icon"></span><div><span id="selected-category">发型</span><strong id="selected-name">随性中分</strong></div><span class="layer-badge">PNG</span></div>
+      <section class="edit-section"><div class="section-title"><h3>部件颜色</h3><button class="small-link" id="reset-color">恢复原色</button></div><div class="color-swatches" id="color-swatches" aria-label="预设颜色"></div><label class="custom-color"><span>自定义颜色</span><span class="color-value" id="color-label">原画配色</span><input id="custom-color" type="color" value="#2d2929" aria-label="选择部件颜色"></label></section>
+      <section class="edit-section transform-section"><div class="section-title"><h3>位置与大小</h3><span class="subtle">精细校准</span></div><label class="slider-label" for="part-scale"><span>缩放</span><output id="scale-value">100%</output></label><input id="part-scale" type="range" min="75" max="125" value="100"><div class="offset-inputs"><label>水平 X<input id="part-x" type="number" min="-150" max="150" step="1" value="0"></label><label>垂直 Y<input id="part-y" type="number" min="-150" max="150" step="1" value="0"></label></div><label class="slider-label" for="part-opacity"><span>不透明度</span><output id="opacity-value">100%</output></label><input id="part-opacity" type="range" min="0" max="100" value="100"><label class="asset-fit-row" id="asset-fit-row" hidden>导入定位<select id="asset-fit"><option value="part">适配当前部件</option><option value="canvas">完整画布对齐</option></select></label></section>
+      <section class="layers-section"><div class="section-title"><h3>人物图层</h3><span class="subtle" id="layer-count">6 LAYERS</span></div><div id="layer-list" class="layer-list"></div></section>
+      <div class="export-area"><button id="export-png" class="export-button"><i data-icon="download"></i>导出透明人物 PNG<i data-icon="arrow-up-right"></i></button><button id="export-zip" class="secondary-button"><i data-icon="layers"></i>导出分层 PNG 包</button><a id="download-ready" class="ready-download" hidden>文件已准备好 · 点击下载</a><div class="config-links"><button id="export-config">导出配置</button><span>·</span><label for="config-upload">导入配置<input type="file" id="config-upload" accept="application/json,.json" hidden></label></div></div>
+    </aside>
+  </main>
+  <footer class="app-footer"><span><span class="tiny-dot"></span><span id="save-status">所有部件独立可编辑</span></span><span>948 × 1659<span class="footer-divider">/</span>透明 PNG<span class="footer-divider">/</span>LUCKY BREAK</span></footer>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="help-dialog"><button class="dialog-close icon-button" id="help-close" aria-label="关闭说明"><i data-icon="close"></i></button><p class="eyebrow">A LITTLE GUIDE</p><h2>一张立绘，许多种可能。</h2><p>左侧选择发型、内搭、外套、裤装和鞋履；右侧可以换色、微调位置，或暂时隐藏单个图层。底部五套造型可以一键应用。</p><p>「保存造型」会保存在当前浏览器。打开「页面读取示例」可以查看另一个页面实时读取到的完整人物。跨设备使用请导出配置或分层 PNG 包。</p><p>自定义素材需使用透明 PNG。单件素材选择「适配当前部件」，与人物等大的 948 × 1659 图层选择「完整画布对齐」。</p><a class="primary-button" href="./reader.html" target="_blank" rel="noopener">查看接入示例<i data-icon="external"></i></a></dialog>
+</body>
+</html>

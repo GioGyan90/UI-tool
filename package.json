@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "dev:wardrobe": "vite --open /wardrobe/index.html"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
