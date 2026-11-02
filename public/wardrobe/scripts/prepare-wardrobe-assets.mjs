@@ -125,3 +125,5 @@ const manifest = {
 };
 await fs.writeFile(new URL('manifest.json', root), JSON.stringify(manifest, null, 2) + '\n');
 console.log(`Prepared ${assets.filter(a => a.file).length} real PNG layers + room; ${manifest.presets.length} presets.`);
+const { buildAnatomy } = await import('./build-wardrobe-anatomy.mjs');
+await buildAnatomy({root,neckSource:sourceMap.neck});

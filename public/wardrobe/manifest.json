@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-02.1",
+  "version": "2026-11-02.2",
   "width": 948,
   "height": 1659,
   "characterBounds": [
@@ -16,10 +16,10 @@
       250
     ],
     "body": [
-      250,
-      90,
-      465,
-      865
+      256,
+      500,
+      452,
+      452
     ],
     "top": [
       251,
@@ -44,15 +44,21 @@
       1448,
       433,
       165
+    ],
+    "head": [
+      400,
+      93,
+      160,
+      190
+    ],
+    "neck": [
+      383,
+      218,
+      191,
+      245
     ]
   },
   "bodyLongSleeveClips": [
-    [
-      380,
-      70,
-      210,
-      295
-    ],
     [
       245,
       836,
@@ -70,14 +76,41 @@
     {
       "id": "skin",
       "kind": "body",
-      "name": "统一身体与面部",
-      "file": "./assets/skin.png",
+      "name": "手臂与手掌",
+      "file": "./assets/skin-arms.png",
       "box": [
         256,
-        93,
+        500,
         452,
-        859
-      ]
+        452
+      ],
+      "facing": "right-three-quarter"
+    },
+    {
+      "id": "head-base",
+      "kind": "head",
+      "name": "基础头部",
+      "file": "./assets/head-base.png",
+      "box": [
+        400,
+        93,
+        160,
+        190
+      ],
+      "facing": "right-three-quarter"
+    },
+    {
+      "id": "neck-base",
+      "kind": "neck",
+      "name": "颈部与锁骨",
+      "file": "./assets/neck-base.png",
+      "box": [
+        383,
+        218,
+        191,
+        245
+      ],
+      "facing": "right-three-quarter"
     },
     {
       "id": "hair-black",
@@ -89,7 +122,8 @@
         53,
         219,
         228
-      ]
+      ],
+      "facing": "right-three-quarter"
     },
     {
       "id": "hair-blonde",
@@ -101,7 +135,8 @@
         49,
         229,
         239
-      ]
+      ],
+      "facing": "right-three-quarter"
     },
     {
       "id": "top-tee",
@@ -114,7 +149,8 @@
         426,
         414
       ],
-      "sleeve": "short"
+      "sleeve": "short",
+      "facing": "right-three-quarter"
     },
     {
       "id": "top-shirt",
@@ -127,7 +163,12 @@
         452,
         579
       ],
-      "sleeve": "long"
+      "sleeve": "long",
+      "facing": "right-three-quarter",
+      "mirrorX": true,
+      "rearCollar": {
+        "file": "./assets/top-shirt-rear-mask.png"
+      }
     },
     {
       "id": "top-turtleneck",
@@ -140,7 +181,11 @@
         452,
         596
       ],
-      "sleeve": "long"
+      "sleeve": "long",
+      "facing": "right-three-quarter",
+      "rearCollar": {
+        "file": "./assets/top-turtleneck-rear-mask.png"
+      }
     },
     {
       "id": "top-formal",
@@ -153,7 +198,12 @@
         452,
         581
       ],
-      "sleeve": "long"
+      "sleeve": "long",
+      "facing": "right-three-quarter",
+      "mirrorX": true,
+      "rearCollar": {
+        "file": "./assets/top-formal-rear-mask.png"
+      }
     },
     {
       "id": "outer-bomber",
@@ -165,7 +215,11 @@
         278,
         469,
         583
-      ]
+      ],
+      "facing": "right-three-quarter",
+      "rearCollar": {
+        "file": "./assets/outer-bomber-rear-mask.png"
+      }
     },
     {
       "id": "outer-field",
@@ -177,7 +231,11 @@
         278,
         469,
         586
-      ]
+      ],
+      "facing": "right-three-quarter",
+      "rearCollar": {
+        "file": "./assets/outer-field-rear-mask.png"
+      }
     },
     {
       "id": "outer-trench",
@@ -189,7 +247,11 @@
         274,
         475,
         920
-      ]
+      ],
+      "facing": "right-three-quarter",
+      "rearCollar": {
+        "file": "./assets/outer-trench-rear-mask.png"
+      }
     },
     {
       "id": "outer-blazer",
@@ -201,7 +263,11 @@
         277,
         469,
         608
-      ]
+      ],
+      "facing": "right-three-quarter",
+      "rearCollar": {
+        "file": "./assets/outer-blazer-rear-mask.png"
+      }
     },
     {
       "id": "none",
@@ -212,7 +278,8 @@
         278,
         469,
         586
-      ]
+      ],
+      "facing": "right-three-quarter"
     },
     {
       "id": "pants-charcoal",
@@ -224,7 +291,8 @@
         684,
         338,
         808
-      ]
+      ],
+      "facing": "right-three-quarter"
     },
     {
       "id": "pants-denim",
@@ -236,7 +304,8 @@
         684,
         339,
         808
-      ]
+      ],
+      "facing": "right-three-quarter"
     },
     {
       "id": "pants-chino",
@@ -248,7 +317,8 @@
         684,
         338,
         808
-      ]
+      ],
+      "facing": "right-three-quarter"
     },
     {
       "id": "shoes-derby",
@@ -260,7 +330,8 @@
         1448,
         433,
         165
-      ]
+      ],
+      "facing": "right-three-quarter"
     },
     {
       "id": "shoes-sneakers",
@@ -272,7 +343,8 @@
         1448,
         433,
         165
-      ]
+      ],
+      "facing": "right-three-quarter"
     }
   ],
   "presets": [
@@ -398,5 +470,19 @@
         }
       }
     }
-  ]
+  ],
+  "anatomySource": {
+    "file": "./assets/skin.png",
+    "box": [
+      256,
+      93,
+      452,
+      859
+    ]
+  },
+  "defaults": {
+    "body": "skin",
+    "head": "head-base",
+    "neck": "neck-base"
+  }
 }

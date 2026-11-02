@@ -1,7 +1,7 @@
-import { CATEGORIES, DRAW_ORDER, STATE_KEY, getManifest, createState, normalizeState, loadState, saveState, renderAvatar, renderLayer, selectedAsset, canvasBlob, getAvatarBlob, importAsset, exportConfig, importConfig } from './avatar-sdk.js';
+import { CATEGORIES, DRAW_ORDER, STATE_KEY, getManifest, createState, normalizeState, loadState, saveState, renderAvatar, renderLayer, selectedAsset, canvasBlob, getAvatarBlob, renderCompositeLayers, importAsset, exportConfig, importConfig } from './avatar-sdk.js?v=20261102-neck2';
 import { makeZip } from './zip.js';
 import { icon, iconize } from './icons.js';
-const labels = { hair: '发型', top: '内搭', outer: '外套', pants: '裤装', shoes: '鞋履', body: '基础身体' };
+const labels = { hair: '发型', top: '内搭', outer: '外套', pants: '裤装', shoes: '鞋履', body: '手臂', head: '头部', neck: '颈部' };
 const $ = id => document.getElementById(id);
 const clone = value => JSON.parse(JSON.stringify(value));
 let manifest, state, saveTimer, toastTimer;
@@ -55,7 +55,7 @@ function renderLibrary() {
       changed(); updateLibrarySelection(); renderInspector();
     }); return button;
   }));
-  $('asset-upload').disabled = selectedKind === 'body'; $('asset-upload').parentElement.style.display = selectedKind === 'body' ? 'none' : 'flex';
+  $('asset-upload').disabled = !CATEGORIES.includes(selectedKind); $('asset-upload').parentElement.style.display = CATEGORIES.includes(selectedKind) ? 'flex' : 'none';
 }
 function updateLibrarySelection() { for (const item of $('asset-grid').children) item.setAttribute('aria-pressed', String(item.dataset.asset === state.layers[selectedKind].id)); }
 function selectKind(kind) { selectedKind = kind; for (const tab of $('category-tabs').children) tab.setAttribute('aria-selected', String(tab.dataset.kind === kind)); renderLibrary(); renderInspector(); if (view === 'layers') void renderExploded(); }
@@ -73,7 +73,7 @@ function renderLayers() {
   $('layer-list').replaceChildren(...[...DRAW_ORDER].reverse().map(kind => {
     const layer = state.layers[kind], asset = selectedAsset(manifest, state, kind);
     const row = element('div', `layer-row${kind === selectedKind ? ' selected' : ''}${!layer.visible ? ' is-hidden' : ''}`);
-    const button = element('button', 'layer-select'); button.innerHTML = icon(kind); button.append(element('span', 'layer-title', kind === 'body' ? '身体' : labels[kind]), element('span', 'layer-item', asset?.name || '无')); button.addEventListener('click', () => selectKind(kind));
+    const button = element('button', 'layer-select'); button.innerHTML = icon(kind); button.append(element('span', 'layer-title', labels[kind]), element('span', 'layer-item', asset?.name || '无')); button.addEventListener('click', () => selectKind(kind));
     const eye = element('button', 'layer-eye'); eye.innerHTML = icon(layer.visible ? 'eye' : 'eye-off'); eye.setAttribute('aria-label', `${layer.visible ? '隐藏' : '显示'}${labels[kind]}`); eye.setAttribute('aria-pressed', String(layer.visible));
     eye.addEventListener('click', () => { layer.visible = !layer.visible; changed(); renderLayers(); }); row.append(button, eye); return row;
   }));
@@ -88,7 +88,7 @@ async function renderMain() {
 }
 async function renderExploded() {
   const current = clone(state);
-  $('exploded-grid').replaceChildren(...['hair', 'body', 'top', 'outer', 'pants', 'shoes'].map((kind, index) => {
+  $('exploded-grid').replaceChildren(...['hair', 'head', 'neck', 'body', 'top', 'outer', 'pants', 'shoes'].map((kind, index) => {
     const button = element('button', `exploded-card${selectedKind === kind ? ' active' : ''}`), canvas = document.createElement('canvas'); canvas.width = 260; canvas.height = 360;
     button.append(element('small', '', `0${index + 1} / PNG`), canvas, element('span', '', labels[kind])); button.addEventListener('click', () => selectKind(kind));
     const preview = clone(current);
@@ -108,13 +108,15 @@ function changed(markCustom = true) {
   $('save-status').textContent = '正在保存造型…'; clearTimeout(saveTimer); saveTimer = setTimeout(() => void persist(), 420); updateLookLabel(); void renderMain();
 }
 function applyPreset(preset) { const customs = state.customAssets; state = createState(manifest, preset.id); state.customAssets = customs; changed(false); updateLibrarySelection(); renderInspector(); }
-function renderPresets() {
+async function renderPresets() {
+  const pending=[];
   $('preset-grid').replaceChildren(...manifest.presets.map(preset => {
     const button = element('button', 'preset-card'); button.type = 'button'; button.dataset.preset = preset.id; button.setAttribute('aria-pressed', String(state.presetId === preset.id)); button.setAttribute('aria-label', `应用${preset.name}整套造型`);
     const canvas = document.createElement('canvas'); canvas.width = 150; canvas.height = 182; const check = element('span', 'preset-check'); check.innerHTML = icon('check');
     button.append(element('span', 'preset-number', preset.number), canvas, element('strong', '', preset.name), check); button.addEventListener('click', () => applyPreset(preset));
-    void renderAvatar(null, createState(manifest, preset.id), manifest).then(result => fitDrawing(canvas, result, manifest.characterBounds, 1)).catch(error => { button.title = error.message; }); return button;
+    pending.push({preset,canvas,button}); return button;
   }));
+  for(const {preset,canvas,button} of pending){try{fitDrawing(canvas,await renderAvatar(null,createState(manifest,preset.id),manifest),manifest.characterBounds,1);}catch(error){button.title=error.message;}}
 }
 function download(blob, filename) {
   const url = URL.createObjectURL(blob), anchor = $('download-ready'), previous = anchor.href;
@@ -151,10 +153,11 @@ function wireControls() {
     state = normalizeState(await importConfig(config, manifest), manifest); changed(false); renderLibrary(); renderInspector(); toast('已恢复造型与自定义素材');
   }));
   $('export-zip').addEventListener('click', safely(() => withBusy($('export-zip'), async () => {
-    const current = clone(state), files = await Promise.all(DRAW_ORDER.map(async (kind, index) => ({ name: `layers/0${index}-${kind}.png`, data: await canvasBlob(await renderLayer(kind, current, manifest)) })));
+    const current = clone(state), stack = await renderCompositeLayers(current, manifest);
+    const files = await Promise.all(stack.map(async ({kind,canvas},index) => ({name:`layers/${String(index).padStart(2,'0')}-${kind}.png`,data:await canvasBlob(canvas)})));
     files.push({ name: 'character.png', data: await getAvatarBlob(current, manifest) }); files.push({ name: 'look.json', data: JSON.stringify(await exportConfig(current), null, 2) });
     files.push({ name: 'README.txt', data: `Lucky Break layered character\nCanvas: ${manifest.width} x ${manifest.height}, transparent PNG.\nComposite layers in filename order from bottom to top at x=0, y=0.\nLayers already include current color, transform, opacity and visibility.\nRoom is excluded. Import look.json to continue editing.\nSDK documentation: public/wardrobe/docs/wardrobe.md in GioGyan90/UI-tool.\n` });
-    download(await makeZip(files), 'luckybreak-layered-look.zip'); toast('已导出完整人物、6 个对齐图层和可恢复配置');
+    download(await makeZip(files), 'luckybreak-layered-look.zip'); toast(`已导出完整人物、${stack.length} 个对齐图层和可恢复配置`);
   })));
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') void persist(); });
 }

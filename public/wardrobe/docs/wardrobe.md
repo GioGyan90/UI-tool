@@ -26,18 +26,22 @@ npm run dev
 
 | 类别 | 独立 PNG 素材 |
 | --- | --- |
-| 身体 | 固定身份的头颈、裸露手臂与手掌 |
+| 头部 | 保留原身份的头脸，与颈部独立 |
+| 颈部 | 独立颈部及锁骨补片，填满开领处 |
+| 手臂 | 裸露手臂与手掌 |
 | 发型 | 黑色随性中分、金色微卷 |
 | 内搭 | 短袖 T 恤、白衬衫、酒红高领针织、礼服衬衫与马甲 |
 | 外套 | 飞行夹克、工装夹克、长风衣、礼服西装；可不穿外套 |
 | 裤装 | 修身西裤、破洞牛仔裤、休闲裤 |
 | 鞋履 | 系带皮鞋、黑白帆布鞋 |
 
-共 **16 个真实 PNG 素材**，约 **3.75 MB**，另有房间 JPG。五套预设为日常轻装、夜行夹克、远行工装、暖金风衣、紫藤礼服。发型与服装可跨套组合；每层支持颜色、位置、缩放、不透明度、显隐及自定义 PNG 导入。此版本马甲和领带属于礼服内搭层。
+共 **18 个透明 PNG 插画素材**，约 **3.78 MB**，另有房间 JPG、7 张后领技术遮罩及保留的原始 skin 拆分源。五套预设为日常轻装、夜行夹克、远行工装、暖金风衣、紫藤礼服。八个编辑图层均支持颜色、位置、缩放、不透明度和显隐；五类发型与服装另支持自定义 PNG 导入。头部、颈部、手臂可从右侧图层列表单独选择。此版本马甲和领带属于礼服内搭层。
 
-素材文件在 `public/wardrobe/assets/`，每个 PNG 裁掉无用透明边，位置由 `manifest.json` 中的 `box: [x,y,width,height]` 定义。单个文件不等于完整人物画布，不能忽略 box。完整画布的每层 PNG 可从页面导出。
+素材文件在 `public/wardrobe/assets/`，每个 PNG 裁掉无用透明边，位置由 `manifest.json` 中的 `box: [x,y,width,height]` 定义。单个文件不等于完整人物画布，不能忽略 box。白衬衫与礼服内搭通过 `mirrorX: true` 统一成朝右的四分之三透视；使用原始文件时也须应用该标记，页面预览和导出已烘焙镜像。完整画布的每层 PNG 可从页面导出。
 
-内搭合成时根据外套轮廓裁去超出的肩袖，保留真正透明的前襟开口。长袖服装会遮住基础手臂，仅保留手掌和头颈；鞋先画、裤后画，使裤脚盖住鞋口。破洞裤的封闭孔洞补入肤色，避免透出房间。换色按各素材亮度中间值保留明暗，允许将深色西裤染成浅紫色。
+内搭合成时根据外套轮廓裁去超出的肩袖，保留真正透明的前襟开口。长袖服装只保留基础手掌；头脸、颈部不再使用固定高度裁切。实际绘制顺序为鞋、裤、手臂、内搭后领、外套后领、颈部与锁骨、内搭前领与衣身、外套前领与衣身、头部、发型。后领在颈后，前领在颈前，开领处由独立锁骨补片填满。鞋先画、裤后画，使裤脚盖住鞋口。破洞裤的封闭孔洞补入肤色，避免透出房间。换色按各素材亮度中间值保留明暗，允许将深色西裤染成浅紫色。
+
+旧版六层配置会自动迁移成八层配置（`version: 1, rigVersion: 2`），将原 skin 的颜色、显隐、透明度和变换按原中心继承到头部、颈部、手臂；原服装和自定义素材继续保留。
 
 ## 读取完整人物
 
@@ -59,7 +63,9 @@ npm run dev
 </script>
 ```
 
-在工具页面本身也可以通过 `window.LuckyBreakAvatar.getCurrentState()` 取得当前配置，通过 `getCurrentPNG()` 取得当前完整人物 PNG Blob。SDK 的通用方法包括 `getManifest()`、`createState(manifest, presetId)`、`loadState()`、`saveState(state)`、`renderAvatar(canvas, state)`、`renderLayer(kind,state)`、`getAvatarBlob(state)`、`subscribeAvatar(callback)`、`exportConfig(state)` 与 `importConfig(config)`。
+在工具页面本身也可以通过 `window.LuckyBreakAvatar.getCurrentState()` 取得当前配置，通过 `getCurrentPNG()` 取得当前完整人物 PNG Blob。SDK 的通用方法包括 `getManifest()`、`createState(manifest, presetId)`、`loadState()`、`saveState(state)`、`renderAvatar(canvas, state)`、`renderLayer(kind,state)`、`renderCompositeLayers(state)`、`getAvatarBlob(state)`、`subscribeAvatar(callback)`、`exportConfig(state)` 与 `importConfig(config)`。
+
+`renderLayer()` 返回八个编辑部件中的单件，衣领仍完整；需要复现人物遮挡或自行打包时使用 `renderCompositeLayers()`，它按 `COMPOSITE_ORDER` 返回十张 `{ kind, canvas }`，已拆开前后领。按返回顺序在同尺寸透明画布上叠加即可得到完整人物。
 
 仅嵌入透明人物，不显示示例说明：
 
@@ -94,7 +100,7 @@ const stop = subscribeAvatar(async state => {
 ## 导出
 
 - **透明人物 PNG**：只导出人物，无房间、地毯或 UI，原始画布尺寸。
-- **分层 PNG ZIP**：`character.png`、6 个统一尺寸的图层 PNG、含自定义素材的 `look.json` 与说明。图层文件已烘焙当前颜色、变换、透明度、显隐和遮挡裁剪。按文件名顺序从下往上以 `(0,0)` 叠加可复现完整人物。
+- **分层 PNG ZIP**：`character.png`、10 个统一尺寸的实际合成图层 PNG、含自定义素材的 `look.json` 与说明。内搭与外套各拆为后领及前领/衣身两张，因此比八个编辑部件多两层。图层文件已烘焙当前颜色、朝向、变换、透明度、显隐和遮挡裁剪。按 `00-shoes.png` 至 `09-hair.png` 的文件名顺序从下往上以 `(0,0)` 叠加可复现完整人物。
 - **配置 JSON**：可回到造型室继续编辑，包含自定义 PNG 数据。
 
 原始完整部件 PNG 保留在 assets，导出的当前外观图层可能因外套遮挡而被裁剪。房间、透明底、拆解模式和预览缩放不影响最终导出构图。
@@ -103,10 +109,10 @@ const stop = subscribeAvatar(async state => {
 
 1. 以相同人物姿势、面部角度、肢体位置生成真正透明背景的单件插画；不能让衣服生成时带上头脸、皮肤、其他衣物或鞋。
 2. 保持领口、肩、腰、腕、脚踝基准，生成后按 `manifest.json` 校准。长外套必须具有真实的前襟透明开口。
-3. 将新文件加入 assets，再加入 manifest 同类别的素材项。需要时设置 `sleeve: "long"`，并做无外套、短夹克、风衣等交叉组合检查。
+3. 将新文件加入 assets，再加入 manifest 同类别的素材项。需要时设置 `sleeve: "long"`、`mirrorX: true`；存在后领时配置同尺寸 `rearCollar.file` alpha 遮罩。新自定义 PNG 默认整体置于颈部前方，有后领时需在清单中提供遮罩。检查无外套、短夹克、风衣等交叉组合。
 4. 一般不需要重新生成身体。改变姿势则需重建整个套件，不能把不同站姿的服装直接混用。
 
-`public/wardrobe/scripts/prepare-wardrobe-assets.mjs` 是机械素材整理脚本：输入本地生成 PNG 路径映射（键为素材 ID，房间键为 room），使用 sharp 裁透明边、拆分左右鞋及身体、校准坐标、导出 manifest。只在重新整理源插画时运行；日常构建无需 sharp，也不会调用图像服务。
+`public/wardrobe/scripts/prepare-wardrobe-assets.mjs` 是机械素材整理脚本：输入本地生成 PNG 路径映射（键为素材 ID，房间键为 room，新颈部源图键为 neck），使用 sharp 裁透明边、拆分左右鞋及身体、校准坐标、导出 manifest。末尾调用 `build-wardrobe-anatomy.mjs`，拆出原头脸和手臂、注册并收紧颈部轮廓、生成后领遮罩。也可单独运行 `node public/wardrobe/scripts/build-wardrobe-anatomy.mjs [颈部源图.png]`；无参数时保留已注册的颈部图。原 `assets/skin.png` 是拆分源，运行时身体项已指向 `skin-arms.png`。只在重新整理源插画时运行；日常构建无需 sharp，也不会调用图像服务。
 
 ## 检查
 
@@ -117,6 +123,19 @@ npx tsc --noEmit
 npm run build
 ```
 
+可选像素验收（本机另需 `@napi-rs/canvas`，无需加入生产依赖）：
+
+```bash
+npm install --no-save --package-lock=false @napi-rs/canvas
+node public/wardrobe/scripts/verify-wardrobe-render.mjs /tmp/wardrobe-render-qa
+```
+
+该脚本导出五套人物、十层 ZIP 与 20 组领口接触图，并检查前后领合并保留原 alpha、实际合成层重组一致、颈部独立移动、开领肤色填充和两件衬衫的肩线朝向。
+
 还需在浏览器目测五套完整人物、至少一组交叉混搭、透明底、拆解模式、PNG/ZIP 导出、上传与配置恢复，以及 reader 页跨标签同步。发布后的页面也应实际打开，确认资源在 GitHub 仓库路径下可加载。
 
-2026-11-02 验收记录：素材检查、3 项配置/ZIP 测试、TypeScript 检查及 Vite 构建通过；GitHub Actions 构建和 Pages 部署成功，外部页面已实际打开。桌面与 390px 预览目测完成，浏览器自定义 PNG 导入、含自定义 PNG/颜色/位置的 JSON 恢复、跨标签人物同步通过。底层渲染器导出五套透明 PNG 和礼服分层 ZIP，ZIP CRC 正确，6 层重合成 alpha 完全一致，预乘 RGB 误差不超过 2/255（透明边缘舍入）。云浏览器能生成导出与下载链接，但未能捕获 Blob 下载事件；导出内容已在渲染器和 ZIP 层验证。
+2026-11-02 初版验收：TypeScript 检查通过；桌面与 390px 预览目测完成，浏览器自定义 PNG 导入、含自定义 PNG/颜色/位置的 JSON 恢复、跨标签人物同步通过。
+
+2026-11-02 头颈修正版验收：素材检查、5 项配置/迁移/ZIP 测试及 Vite 构建通过。底层渲染器导出五套透明 PNG、20 组内搭/外套领口接触图和礼服十层 ZIP；ZIP CRC 正确，十层重合成与完整人物逐像素一致，前后领合并 alpha 误差不超过 1/255、预乘 RGB 误差不超过 2/255（透明边缘舍入）。颈部移动不影响头部，开领处检测到 3920 个连续肤色像素；白衬衫及礼服肩线朝向通过检查。浏览器已验证八层拆解及颈部独立移动/还原。云浏览器未能捕获 Blob 下载事件；导出内容已在渲染器和 ZIP 层验证。
+
+![20 组领口混搭检查](collar-combinations.png)

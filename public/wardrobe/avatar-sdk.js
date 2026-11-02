@@ -1,11 +1,14 @@
 /** Lucky Break layered avatar SDK. No framework or remote service required. */
 export const CATEGORIES = ['hair', 'top', 'outer', 'pants', 'shoes'];
-export const DRAW_ORDER = ['shoes', 'pants', 'body', 'top', 'outer', 'hair'];
+export const DRAW_ORDER = ['shoes', 'pants', 'body', 'neck', 'top', 'outer', 'head', 'hair'];
+export const COMPOSITE_ORDER = ['shoes', 'pants', 'body', 'top-back', 'outer-back', 'neck', 'top', 'outer', 'head', 'hair'];
+const LAYER_KINDS = ['body', 'head', 'neck', ...CATEGORIES];
 export const STATE_KEY = 'luckybreak.wardrobe.v1';
 const DB_NAME = 'luckybreak-wardrobe';
 const CHANNEL_NAME = 'luckybreak-avatar';
 const imageCache = new Map();
 const layerCache = new Map();
+const collarCache = new Map();
 let dbPromise;
 let manifestPromise;
 let channel;
@@ -13,7 +16,7 @@ const number = (v, fallback, min, max) => Number.isFinite(Number(v)) ? Math.min(
 const copy = value => JSON.parse(JSON.stringify(value));
 
 export async function getManifest() {
-  manifestPromise ||= fetch(new URL('./manifest.json', import.meta.url)).then(response => {
+  manifestPromise ||= fetch(new URL('./manifest.json?v=20261102-neck2', import.meta.url)).then(response => {
     if (!response.ok) throw new Error('素材清单读取失败，请刷新重试。');
     return response.json();
   }).catch(error => { manifestPromise = undefined; throw error; });
@@ -22,16 +25,16 @@ export async function getManifest() {
 
 export function createState(manifest, presetId = 'night') {
   const preset = manifest.presets.find(item => item.id === presetId) || manifest.presets[0];
-  const state = { version: 1, presetId: preset.id, modifiedAt: new Date().toISOString(), layers: {}, customAssets: {} };
-  for (const kind of ['body', ...CATEGORIES]) {
-    const selection = preset.layers[kind] || (kind === 'body' ? { id: 'skin' } : {});
+  const state = { version: 1, rigVersion: 2, presetId: preset.id, modifiedAt: new Date().toISOString(), layers: {}, customAssets: {} };
+  for (const kind of LAYER_KINDS) {
+    const selection = preset.layers[kind] || { id: manifest.defaults?.[kind] || (kind === 'body' ? 'skin' : undefined) };
     state.layers[kind] = { id: selection.id, tint: selection.tint || null, x: 0, y: 0, scale: 1, opacity: 1, visible: true, fit: 'part' };
   }
   return state;
 }
 
 export function normalizeState(input, manifest) {
-  if (!input || input.version !== 1 || typeof input.layers !== 'object') throw new Error('配置格式不兼容，需要版本 1 的人物造型配置。');
+  if (!input || input.version !== 1 || !input.layers || typeof input.layers !== 'object') throw new Error('配置格式不兼容，需要版本 1 的人物造型配置。');
   const state = createState(manifest, input.presetId);
   state.presetId = manifest.presets.some(p => p.id === input.presetId) ? input.presetId : 'custom';
   state.modifiedAt = typeof input.modifiedAt === 'string' && !Number.isNaN(Date.parse(input.modifiedAt)) ? input.modifiedAt : new Date().toISOString();
@@ -40,8 +43,17 @@ export function normalizeState(input, manifest) {
     if (!/^user-[\w-]{1,80}$/.test(id) || !asset || !CATEGORIES.includes(asset.kind)) continue;
     state.customAssets[id] = { id, kind: asset.kind, name: String(asset.name || '自定义素材').slice(0, 50) };
   }
-  for (const kind of ['body', ...CATEGORIES]) {
-    const layer = input.layers[kind] || {};
+  const legacy = !input.layers.head && !input.layers.neck && input.layers.body;
+  for (const kind of LAYER_KINDS) {
+    let layer = input.layers[kind] || {};
+    if (legacy && ['body','head','neck'].includes(kind)) {
+      const oldBox = manifest.anatomySource?.box || [256,93,452,859];
+      const nextBox = manifest.slots[kind];
+      const scale = number(legacy.scale,1,.75,1.25);
+      layer = { ...legacy, id: kind === 'body' ? 'skin' : state.layers[kind].id,
+        x: number(legacy.x,0,-150,150) + (nextBox[0]+nextBox[2]/2-oldBox[0]-oldBox[2]/2)*(scale-1),
+        y: number(legacy.y,0,-150,150) + (nextBox[1]+nextBox[3]/2-oldBox[1]-oldBox[3]/2)*(scale-1) };
+    }
     const validBuiltin = manifest.assets.some(asset => asset.id === layer.id && asset.kind === kind);
     const validCustom = state.customAssets[layer.id]?.kind === kind;
     const id = validBuiltin || validCustom ? layer.id : state.layers[kind].id;
@@ -218,21 +230,16 @@ export async function renderLayer(kind, state, manifest) {
   manifest ||= await getManifest();
   const layer = state.layers[kind];
   const asset = selectedAsset(manifest, state, kind);
-  const canvas = makeCanvas(manifest);
-  if (!layer || !asset || !layer.visible || layer.opacity === 0 || asset.id === 'none') return canvas;
+  if (!layer || !asset || !layer.visible || layer.opacity === 0 || asset.id === 'none') return makeCanvas(manifest);
   const outer = selectedAsset(manifest, state, 'outer');
   const top = selectedAsset(manifest, state, 'top');
   const longSleeve = (state.layers.outer.visible && state.layers.outer.opacity > 0 && outer && outer.id !== 'none') || (state.layers.top.visible && state.layers.top.opacity > 0 && top?.sleeve === 'long');
-  const key = JSON.stringify([manifest.version, kind, layer, kind === 'body' && longSleeve, kind === 'top' ? state.layers.outer : null, ['top', 'outer'].includes(kind) ? state.layers.body : null]);
+  const key = JSON.stringify([manifest.version, kind, layer, kind === 'body' && longSleeve, kind === 'top' ? state.layers.outer : null]);
   if (layerCache.has(key)) return layerCache.get(key);
+  const canvas = makeCanvas(manifest);
   const image = await loadImage(asset);
   if (!image) return canvas;
   const context = canvas.getContext('2d');
-  if (kind === 'body' && longSleeve) {
-    context.beginPath();
-    for (const rect of manifest.bodyLongSleeveClips) context.rect(...rect);
-    context.clip();
-  }
   let box = asset.box || manifest.slots[kind];
   if (asset.id.startsWith('user-')) {
     if (layer.fit === 'canvas') box = [0, 0, manifest.width, manifest.height];
@@ -244,17 +251,15 @@ export async function renderLayer(kind, state, manifest) {
   }
   const [x, y, width, height] = box;
   context.translate(x + width / 2 + layer.x, y + height / 2 + layer.y);
-  context.scale(layer.scale, layer.scale);
+  context.scale(layer.scale * (asset.mirrorX ? -1 : 1), layer.scale);
+  if (kind === 'body' && longSleeve) {
+    context.beginPath();
+    for (const [cx,cy,cw,ch] of manifest.bodyLongSleeveClips) context.rect(cx-x-width/2,cy-y-height/2,cw,ch);
+    context.clip();
+  }
   context.drawImage(image, -width / 2, -height / 2, width, height);
   context.resetTransform();
   if (layer.tint) tintCanvas(canvas, layer.tint);
-  if ((kind === 'outer' || (kind === 'top' && asset.id !== 'top-turtleneck')) && state.layers.body.visible) {
-    // Back collars pass behind the head/upper neck; front lapels stay in front below it.
-    const skin = await renderLayer('body', state, manifest);
-    context.globalCompositeOperation = 'destination-out';
-    context.drawImage(skin, 0, 0, canvas.width, 320, 0, 0, canvas.width, 320);
-    context.globalCompositeOperation = 'source-over';
-  }
   if (kind === 'top' && state.layers.outer.visible && state.layers.outer.opacity > 0 && outer?.id !== 'none') {
     // Fit an inner garment inside the outer silhouette while preserving its open front.
     const jacket = await renderLayer('outer', state, manifest);
@@ -299,14 +304,55 @@ export async function renderLayer(kind, state, manifest) {
   return canvas;
 }
 
+async function splitCollar(full, kind, state, manifest) {
+  const asset=selectedAsset(manifest,state,kind), layer=state.layers[kind];
+  const key=JSON.stringify([manifest.version,kind,layer,kind==='top'?state.layers.outer:null]);
+  if(collarCache.has(key))return collarCache.get(key);
+  const back=makeCanvas(manifest), front=makeCanvas(manifest);
+  const fc=front.getContext('2d');fc.drawImage(full,0,0);
+  if(!asset?.rearCollar || !layer.visible || asset.id==='none') return {back,front};
+  const mask=makeCanvas(manifest), mc=mask.getContext('2d');
+  const image=await loadImage({id:asset.id+'-rear-mask',name:asset.name+'后领',file:asset.rearCollar.file});
+  const [x,y,w,h]=asset.box;
+  mc.translate(x+w/2+layer.x,y+h/2+layer.y);
+  mc.scale(layer.scale*(asset.mirrorX?-1:1),layer.scale);
+  mc.drawImage(image,-w/2,-h/2,w,h);mc.resetTransform();
+  // Preserve antialiasing and the original alpha when front/back recombine:
+  // A = Af + Ab*(1-Af), hence Ab=(A-Af)/(1-Af).
+  const pixels=mc.getImageData(0,0,mask.width,mask.height), original=full.getContext('2d').getImageData(0,0,mask.width,mask.height);
+  const frontPixels=fc.createImageData(mask.width,mask.height),bc=back.getContext('2d'),backPixels=bc.createImageData(mask.width,mask.height);
+  for(let i=0;i<original.data.length;i+=4){
+    const a=original.data[i+3]/255,m=pixels.data[i+3]/255,fa=a*(1-m),ba=fa<1?(a-fa)/(1-fa):0;
+    for(let c=0;c<3;c++)frontPixels.data[i+c]=backPixels.data[i+c]=original.data[i+c];
+    frontPixels.data[i+3]=Math.round(fa*255);backPixels.data[i+3]=Math.round(ba*255);
+  }
+  fc.putImageData(frontPixels,0,0);bc.putImageData(backPixels,0,0);
+  const result={back,front};collarCache.set(key,result);
+  if(collarCache.size>4)collarCache.delete(collarCache.keys().next().value);
+  return result;
+}
+
+/** Actual paint/export stack: rear collars, independent neck, front garments, head. */
+export async function renderCompositeLayers(state, manifest) {
+  manifest ||= await getManifest();
+  if(!state.layers.head || !state.layers.neck) state=normalizeState(state,manifest);
+  const layers = await Promise.all(DRAW_ORDER.map(async kind => [kind, await renderLayer(kind, state, manifest)]));
+  const canvases=Object.fromEntries(layers);
+  for(const kind of ['top','outer']) {
+    const {back,front}=await splitCollar(canvases[kind],kind,state,manifest);
+    canvases[kind+'-back']=back;canvases[kind]=front;
+  }
+  return COMPOSITE_ORDER.map(kind=>({kind,canvas:canvases[kind]}));
+}
+
 /** Compose offscreen first, so overlapping async renders never leave partial avatars. */
 export async function renderAvatar(target, state, manifest) {
   manifest ||= await getManifest();
-  const layers = await Promise.all(DRAW_ORDER.map(async kind => [kind, await renderLayer(kind, state, manifest)]));
+  const layers=await renderCompositeLayers(state,manifest);
   const result = makeCanvas(manifest);
   const context = result.getContext('2d');
-  for (const [kind, image] of layers) {
-    context.drawImage(image, 0, 0);
+  for (const {canvas} of layers) {
+    context.drawImage(canvas, 0, 0);
   }
   if (target) {
     target.width = manifest.width;
@@ -374,9 +420,10 @@ export async function importConfig(config, manifest) {
   }
   for (const [id, blob] of pending) { await dbPut('assets', id, blob); imageCache.delete(id); }
   layerCache.clear();
+  collarCache.clear();
   return state;
 }
 
 /** Framework-free integration: import SDK, loadState, renderAvatar, subscribeAvatar. */
-export const LuckyBreakAvatar = { getManifest, loadState, saveState, renderAvatar, renderLayer, getAvatarBlob, subscribeAvatar, createState, exportConfig, importConfig };
+export const LuckyBreakAvatar = { getManifest, loadState, saveState, renderAvatar, renderLayer, renderCompositeLayers, getAvatarBlob, subscribeAvatar, createState, exportConfig, importConfig };
 if (typeof window !== 'undefined') window.LuckyBreakAvatar = LuckyBreakAvatar;
