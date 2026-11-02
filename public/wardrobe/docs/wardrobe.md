@@ -2,6 +2,12 @@
 
 独立页面位于 `public/wardrobe/`，由原 UI 工作台顶部入口进入。房间只作为预览背景；人物由真实透明 PNG 合成，可供其他页面和 Three.js 读取。
 
+在线页面：https://giogyan90.github.io/UI-tool/wardrobe/index.html
+
+读取示例：https://giogyan90.github.io/UI-tool/wardrobe/reader.html
+
+![已发布页面预览](preview.jpg)
+
 ## 本地运行与发布
 
 ```bash
@@ -112,3 +118,5 @@ npm run build
 ```
 
 还需在浏览器目测五套完整人物、至少一组交叉混搭、透明底、拆解模式、PNG/ZIP 导出、上传与配置恢复，以及 reader 页跨标签同步。发布后的页面也应实际打开，确认资源在 GitHub 仓库路径下可加载。
+
+2026-11-02 验收记录：素材检查、3 项配置/ZIP 测试、TypeScript 检查及 Vite 构建通过；GitHub Actions 构建和 Pages 部署成功，外部页面已实际打开。桌面与 390px 预览目测完成，浏览器自定义 PNG 导入、含自定义 PNG/颜色/位置的 JSON 恢复、跨标签人物同步通过。底层渲染器导出五套透明 PNG 和礼服分层 ZIP，ZIP CRC 正确，6 层重合成 alpha 完全一致，预乘 RGB 误差不超过 2/255（透明边缘舍入）。云浏览器能生成导出与下载链接，但未能捕获 Blob 下载事件；导出内容已在渲染器和 ZIP 层验证。

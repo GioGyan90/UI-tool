@@ -19,7 +19,8 @@ function fitDrawing(target, source, box, padding = 10) {
 }
 async function assetThumb(asset, canvas) {
   const preview = createState(manifest); preview.customAssets = clone(state.customAssets);
-  if (asset.kind === 'top') preview.layers.outer.id = 'none';
+  if (asset.kind === 'top' || asset.kind === 'body') preview.layers.outer.id = 'none';
+  if (asset.kind === 'body') preview.layers.top.visible = false;
   preview.layers[asset.kind] = { id: asset.id, tint: null, x: 0, y: 0, scale: 1, opacity: 1, visible: true, fit: 'part' };
   const result = await renderLayer(asset.kind, preview, manifest);
   fitDrawing(canvas, result, asset.thumbBox || asset.box || manifest.slots[asset.kind], asset.kind === 'hair' ? 18 : 12);
@@ -90,7 +91,10 @@ async function renderExploded() {
   $('exploded-grid').replaceChildren(...['hair', 'body', 'top', 'outer', 'pants', 'shoes'].map((kind, index) => {
     const button = element('button', `exploded-card${selectedKind === kind ? ' active' : ''}`), canvas = document.createElement('canvas'); canvas.width = 260; canvas.height = 360;
     button.append(element('small', '', `0${index + 1} / PNG`), canvas, element('span', '', labels[kind])); button.addEventListener('click', () => selectKind(kind));
-    void renderLayer(kind, current, manifest).then(result => { const asset = selectedAsset(manifest, current, kind); fitDrawing(canvas, result, asset?.box || manifest.slots[kind], 14); }).catch(error => { button.title = error.message; }); return button;
+    const preview = clone(current);
+    if (kind === 'top' || kind === 'body') preview.layers.outer.visible = false;
+    if (kind === 'body') preview.layers.top.visible = false;
+    void renderLayer(kind, preview, manifest).then(result => { const asset = selectedAsset(manifest, current, kind); fitDrawing(canvas, result, asset?.box || manifest.slots[kind], 14); }).catch(error => { button.title = error.message; }); return button;
   }));
 }
 async function persist(manual = false) {

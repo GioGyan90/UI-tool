@@ -6,9 +6,13 @@
 
 ## 人物造型室
 
+在线体验：[人物造型室](https://giogyan90.github.io/UI-tool/wardrobe/index.html) · [其他页面读取示例](https://giogyan90.github.io/UI-tool/wardrobe/reader.html)
+
 新增独立工具页面：[`public/wardrobe/`](public/wardrobe/)，本地启动后打开 `http://localhost:3000/wardrobe/index.html`。包含房间试衣预览、16 个独立透明 PNG 素材、5 套可混搭造型、单层换色与定位、自定义 PNG、完整人物与分层包导出，以及其他页面读取示例。
 
 接入和素材说明见 [docs/wardrobe.md](public/wardrobe/docs/wardrobe.md)。新页面无需 API Key。main 更新后通过 GitHub Actions 发布到 Pages。
+
+![人物造型室预览](public/wardrobe/docs/preview.jpg)
 
 This contains everything you need to run your app locally.
 
