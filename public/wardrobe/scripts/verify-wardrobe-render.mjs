@@ -29,7 +29,7 @@ for(const preset of manifest.presets){
   await fs.writeFile(path.join(output,preset.id+'.png'),canvas.toBuffer('image/png'));
   if(preset.id==='formal'){
     const stack=await sdk.renderCompositeLayers(state,manifest);
-    assert.equal(stack.length,10);
+    assert.equal(stack.length,12);
     const recomposed=sdk.makeCanvas(manifest);
     for(const part of stack)recomposed.getContext('2d').drawImage(part.canvas,0,0);
     assert.deepEqual(pixels(recomposed),data,'Export stack must reproduce the complete avatar.');
@@ -38,7 +38,7 @@ for(const preset of manifest.presets){
     const zip=await makeZip(files);await fs.writeFile(path.join(output,'formal-layered.zip'),Buffer.from(await zip.arrayBuffer()));
     for(const kind of ['top','outer']){
       const joined=sdk.makeCanvas(manifest),jc=joined.getContext('2d');
-      jc.drawImage(stack.find(p=>p.kind===kind+'-back').canvas,0,0);jc.drawImage(stack.find(p=>p.kind===kind).canvas,0,0);
+      jc.drawImage(stack.find(p=>p.kind===kind+'-collar-back').canvas,0,0);jc.drawImage(stack.find(p=>p.kind===kind).canvas,0,0);
       const delta=difference(pixels(joined),pixels(await sdk.renderLayer(kind,state,manifest)));
       assert(delta.alpha<=1&&delta.rgb<=2,`${kind} collar split changed source artwork: ${JSON.stringify(delta)}`);
     }
@@ -68,7 +68,35 @@ const restored=sdk.normalizeState(JSON.parse(JSON.stringify(calibrated)),manifes
 assert.deepEqual(pixels(await sdk.renderAvatar(null,calibrated,manifest)),pixels(await sdk.renderAvatar(null,restored,manifest)),'Calibrated configuration must restore the same exported pixels.');
 const calibratedStack=await sdk.renderCompositeLayers(restored,manifest),calibratedCanvas=sdk.makeCanvas(manifest);
 for(const part of calibratedStack)calibratedCanvas.getContext('2d').drawImage(part.canvas,0,0);
-assert.deepEqual(pixels(calibratedCanvas),pixels(await sdk.renderAvatar(null,restored,manifest)),'Calibrated ten-layer export must match the avatar.');
+assert.deepEqual(pixels(calibratedCanvas),pixels(await sdk.renderAvatar(null,restored,manifest)),'Calibrated export stack must match the avatar.');
+const rearLook=sdk.createState(manifest,'trench');rearLook.layers.hair.id='hair-blonde-long';rearLook.layers['hair-back'].id='hair-long-back';
+const withoutRear=structuredClone(rearLook);withoutRear.layers['hair-back'].visible=false;withoutRear.layers['outer-back'].visible=false;
+const rearResult=await sdk.renderAvatar(null,rearLook,manifest),without=pixels(await sdk.renderAvatar(null,withoutRear,manifest)),withPixels=pixels(rearResult);
+await fs.writeFile(path.join(output,'rear-layer-demo.png'),rearResult.toBuffer('image/png'));
+const rearStack=await sdk.renderCompositeLayers(rearLook,manifest),joinedRear=sdk.makeCanvas(manifest);
+for(const part of rearStack)joinedRear.getContext('2d').drawImage(part.canvas,0,0);
+assert.deepEqual(pixels(joinedRear),withPixels,'Nonempty rear pieces must survive the exported paint stack.');
+const rearFiles=await Promise.all(rearStack.map(async({kind,canvas},index)=>({name:`layers/${String(index).padStart(2,'0')}-${kind}.png`,data:await sdk.canvasBlob(canvas)})));
+rearFiles.push({name:'character.png',data:await sdk.canvasBlob(rearResult)});
+await fs.writeFile(path.join(output,'rear-layered.zip'),Buffer.from(await(await makeZip(rearFiles)).arrayBuffer()));
+let exposedRear=0,opaqueFront=0,maxFrontError=0;
+for(let i=0;i<without.length;i+=4){
+  // The flattened alpha may round 254.5 to 255; allow the same 2/255 edge
+  // quantization tolerance used by the source collar recomposition check.
+  if(without[i+3]===255){opaqueFront++;for(let c=0;c<4;c++)maxFrontError=Math.max(maxFrontError,Math.abs(withPixels[i+c]-without[i+c]));}
+  if(without[i+3]===0&&withPixels[i+3]>200)exposedRear++;
+}
+assert(opaqueFront>10000&&exposedRear>100,'Rear pieces should be visible only where the foreground permits.');
+assert(maxFrontError<=2,`Rear art covered the opaque foreground: max channel difference ${maxFrontError}.`);
+function centerX(canvas){const data=pixels(canvas);let sum=0,weight=0;for(let y=0;y<canvas.height;y++)for(let x=0;x<canvas.width;x++){const a=data[(y*canvas.width+x)*4+3];sum+=a*x;weight+=a;}return sum/weight;}
+const initialRear=await sdk.renderLayer('hair-back',rearLook,manifest),shifted=structuredClone(rearLook);shifted.layers.hair.x=17;
+assert(Math.abs(centerX(await sdk.renderLayer('hair-back',shifted,manifest))-centerX(initialRear)-17)<1e-5,'Rear hair should follow its front piece.');
+const hideCoat=structuredClone(rearLook);hideCoat.layers.outer.visible=false;
+assert(!pixels(await sdk.renderLayer('outer-back',hideCoat,manifest)).some((v,i)=>i%4===3&&v),'A linked lining should hide with its coat.');
+hideCoat.layers['outer-back'].followParent=false;
+assert(pixels(await sdk.renderLayer('outer-back',hideCoat,manifest)).some((v,i)=>i%4===3&&v>200),'An unlinked lining remains independently editable.');
+await fs.writeFile(path.join(output,'rear-layer-demo.png'),rearResult.toBuffer('image/png'));
+for(const kind of ['hair-back','outer-back'])await fs.writeFile(path.join(output,kind+'.png'),(await sdk.renderLayer(kind,rearLook,manifest)).toBuffer('image/png'));
 const full=pixels(await sdk.renderAvatar(null,state,manifest)),stack=await sdk.renderCompositeLayers(state,manifest),np=pixels(neck),tp=pixels(stack.find(p=>p.kind==='top').canvas),op=pixels(stack.find(p=>p.kind==='outer').canvas);
 let exposed=0;
 for(let y=330;y<415;y++)for(let x=430;x<520;x++){
@@ -92,4 +120,4 @@ for(let row=0;row<tops.length;row++)for(let col=0;col<outers.length;col++){
   ac.fillStyle='#fffdf5';ac.fillRect(col*220,row*300,220,18);ac.fillStyle='#355044';ac.font='10px sans-serif';ac.fillText(tops[row].id+' / '+outers[col].id,col*220+4,row*300+12);
 }
 await fs.writeFile(path.join(output,'collar-combinations.png'),atlas.toBuffer('image/png'));
-console.log(`PASS: 5 presets, 20 garment combinations, 10 export layers, collar alpha preservation, independent neck movement, ${exposed} filled open-collar pixels, right-facing shoulders.`);
+console.log(`PASS: 5 presets, 20 garment combinations, 12 export layers, rear occlusion/link/unlink, ${exposedRear} exposed rear pixels, collar alpha preservation, independent calibration, ${exposed} filled open-collar pixels, right-facing shoulders.`);

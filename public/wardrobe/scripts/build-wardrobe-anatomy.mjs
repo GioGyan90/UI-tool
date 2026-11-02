@@ -21,6 +21,9 @@ async function saveCrop(buffer, width, height, file, origin, root) {
   return box;
 }
 export async function buildAnatomy({root=rootDefault,neckSource}={}) {
+  let hasRear=false;
+  try { await fs.access(new URL('assets/hair-long-back.png',root));hasRear=true; }catch(error){if(error.code!=='ENOENT')throw error;}
+  if(hasRear){const{registerRearAssets}=await import('./register-rear-assets.mjs');await registerRearAssets({root});}
   const manifest=JSON.parse(await fs.readFile(new URL('manifest.json',root),'utf8'));
   const original=await sharp(new URL('assets/skin.png',root).pathname).ensureAlpha().raw().toBuffer();
   const source={box:[256,93,452,859],width:452,height:859};
@@ -68,9 +71,9 @@ export async function buildAnatomy({root=rootDefault,neckSource}={}) {
     }
   }
   await sharp(registered,{raw:{width:neckBox[2],height:neckBox[3],channels:4}}).png().toFile(new URL('assets/neck-base.png',root).pathname);
-  manifest.version='2026-11-02.2';
+  manifest.version=hasRear?'2026-11-02.4':'2026-11-02.3';
   manifest.anatomySource={file:'./assets/skin.png',box:source.box};
-  manifest.defaults={body:'skin',head:'head-base',neck:'neck-base'};
+  manifest.defaults={...manifest.defaults,body:'skin',head:'head-base',neck:'neck-base'};
   const body=manifest.assets.find(a=>a.id==='skin');
   Object.assign(body,{name:'手臂与手掌',file:'./assets/skin-arms.png',box:armsBox});
   manifest.assets=manifest.assets.filter(a=>!['head','neck'].includes(a.kind));
@@ -99,19 +102,6 @@ export async function buildAnatomy({root=rootDefault,neckSource}={}) {
         while(y<maxY && data[(y*info.width+x)*4+3]>=96)y++;
         if(y<maxY && y-first>=2)for(let py=first;py<y;py++)mask[(py*info.width+x)*4+3]=255;
       }
-      if(asset.id==='top-turtleneck'){
-        // This drawing paints the inside of the rolled collar opaque dark red.
-        // Put that inner ellipse behind the neck as well as its outer rim.
-        const polygon=[[169,16],[176,4],[220,0],[267,0],[267,9],[250,16],[216,22],[178,25]];
-        for(let y=0;y<30;y++)for(let x=160;x<280;x++){
-          let inside=false;
-          for(let i=0,j=polygon.length-1;i<polygon.length;j=i++){
-            const a=polygon[i],b=polygon[j];
-            if((a[1]>y)!==(b[1]>y) && x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])inside=!inside;
-          }
-          if(inside)mask[(y*info.width+x)*4+3]=255;
-        }
-      }
       const expanded=Buffer.from(mask);
       for(let y=0;y<maxY;y++)for(let x=Math.max(0,startX-3);x<Math.min(info.width,endX+3);x++)if(mask[(y*info.width+x)*4+3]){
         for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
@@ -120,10 +110,41 @@ export async function buildAnatomy({root=rootDefault,neckSource}={}) {
         }
       }
       const file=`./assets/${asset.id}-rear-mask.png`;
-      await sharp(expanded,{raw:info}).blur(.6).png().toFile(new URL(file,root).pathname);
+      if(asset.id==='top-turtleneck'){
+        // Follow the original black front lip. Expanding a polygon across this
+        // line erased the ink and left an artificial, stair-stepped cloth edge.
+        expanded.fill(0);
+        const lip=[[169,10],[173,13],[180,17],[190,19],[200,19],[210,19],[220,17],[230,15],[240,13],[250,10],[260,6],[267,3]];
+        for(let x=169;x<=267;x++){
+          const j=Math.max(1,lip.findIndex((p,i)=>i>0&&x<=p[0])),a=lip[j-1],b=lip[j];
+          const edge=a[1]+(x-a[0])/(b[0]-a[0])*(b[1]-a[1])-.25;
+          for(let y=0;y<24;y++)expanded[(y*info.width+x)*4+3]=Math.round(Math.max(0,Math.min(1,edge-y+.5))*255);
+        }
+      }
+      if(asset.id==='top-formal'&&hasRear){
+        // At the widened nape corner, the grey inner band is connected to the
+        // front fold, so alpha alone cannot identify it as a rear surface.
+        for(let x=165;x<286;x++){
+          const sample=y=>data.subarray((y*info.width+x)*4,(y*info.width+x)*4+4);
+          let start=0;
+          for(;start<22;start++){const p=sample(start);if(p[3]>96&&Math.max(...p.subarray(0,3))-Math.min(...p.subarray(0,3))<22&&p[0]>95&&p[0]<226)break;}
+          if(start>=22)continue;
+          let end=start;
+          for(;end<38;end++){const p=sample(end);if(p[3]<96||(p[0]>231&&p[1]>225&&p[2]>225))break;}
+          if(end-start<3)continue;
+          let edge=end-.25,min=Infinity;
+          for(let y=Math.max(start,end-3);y<end;y++){const p=sample(y),lum=p[0]+p[1]+p[2];if(lum<min){min=lum;edge=y-.25;}}
+          for(let y=0;y<end;y++)expanded[(y*info.width+x)*4+3]=Math.max(expanded[(y*info.width+x)*4+3],Math.round(Math.max(0,Math.min(1,edge-y+.5))*255));
+        }
+      }
+      await sharp(expanded,{raw:info}).blur(asset.id==='top-turtleneck'?.3:.6).png().toFile(new URL(file,root).pathname);
       asset.rearCollar={file};
     }
-    if(['top-shirt','top-formal'].includes(asset.id))asset.mirrorX=true;
+    if(asset.id==='top-shirt')asset.mirrorX=true;
+    if(asset.id==='top-formal'){
+      asset.mirrorX=!hasRear;
+      delete asset.collarFit;
+    }
   }
   await fs.writeFile(new URL('manifest.json',root),JSON.stringify(manifest,null,2)+'\n');
   console.log('Registered separate head, neck/clavicles and arms; corrected shirt and formal top orientation.');

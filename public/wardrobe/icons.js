@@ -2,6 +2,8 @@ const paths = {
 head:'<circle cx="12" cy="10" r="7"/><path d="M8 16v4h8v-4M9 10h.01m6 0h.01"/>',
 neck:'<path d="M8 3v7l-5 5v6h18v-6l-5-5V3M8 14l4 3 4-3"/>',
 hair:'<path d="M5 14c-3-6 0-11 7-11s10 5 7 11l-2-4-2 2-1-5-4 5-2-3-3 5Z"/><path d="M7 14v3c1 4 9 4 10 0v-3"/>',
+'hair-back':'<path d="M6 6c0-5 12-5 12 0 0 4 3 9 3 15l-5-3-4 4-4-4-5 3c0-6 3-11 3-15Z"/><path d="M8 8v6m4-8v10m4-8v6"/>',
+'outer-back':'<path d="m7 3 5 2 5-2 4 18H3L7 3Z"/><path d="M12 5v16M6 8h12M5 18h14"/>',
 top:'<path d="m8 4-5 3-2 5 4 2 1-3v10h12V11l1 3 4-2-2-5-5-3c-1 4-7 4-8 0Z"/>',
 outer:'<path d="m9 3-5 3-2 14 4 1 2-12-1 12h10L16 9l2 12 4-1-2-14-5-3"/><path d="m9 3 3 5 3-5M12 8v13M8 12h2m4 0h2"/>',
 pants:'<path d="M6 3h12l2 18h-6l-2-11-2 11H4L6 3Z"/><path d="M6 7h12M12 3v7M8 7v2m8-2v2"/>',

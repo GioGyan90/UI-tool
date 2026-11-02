@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-02.2",
+  "version": "2026-11-02.4",
   "width": 948,
   "height": 1659,
   "characterBounds": [
@@ -56,6 +56,18 @@
       218,
       191,
       245
+    ],
+    "hair-back": [
+      305,
+      125,
+      320,
+      500
+    ],
+    "outer-back": [
+      302,
+      292,
+      366,
+      892
     ]
   },
   "bodyLongSleeveClips": [
@@ -191,7 +203,7 @@
       "id": "top-formal",
       "kind": "top",
       "name": "礼服衬衫与马甲",
-      "file": "./assets/top-formal.png",
+      "file": "./assets/top-formal-v2.png",
       "box": [
         256,
         284,
@@ -200,7 +212,7 @@
       ],
       "sleeve": "long",
       "facing": "right-three-quarter",
-      "mirrorX": true,
+      "mirrorX": false,
       "rearCollar": {
         "file": "./assets/top-formal-rear-mask.png"
       }
@@ -251,7 +263,8 @@
       "facing": "right-three-quarter",
       "rearCollar": {
         "file": "./assets/outer-trench-rear-mask.png"
-      }
+      },
+      "backAsset": "outer-trench-lining"
     },
     {
       "id": "outer-blazer",
@@ -344,6 +357,79 @@
         433,
         165
       ],
+      "facing": "right-three-quarter"
+    },
+    {
+      "id": "hair-blonde-long",
+      "kind": "hair",
+      "name": "鎏金长发",
+      "file": "./assets/hair-blonde.png",
+      "box": [
+        369,
+        49,
+        229,
+        239
+      ],
+      "facing": "right-three-quarter",
+      "backAsset": "hair-long-back",
+      "thumbBox": [
+        305,
+        49,
+        320,
+        576
+      ]
+    },
+    {
+      "id": "hair-back-none",
+      "kind": "hair-back",
+      "name": "无后发",
+      "empty": true,
+      "box": [
+        305,
+        125,
+        320,
+        500
+      ],
+      "facing": "right-three-quarter"
+    },
+    {
+      "id": "hair-long-back",
+      "kind": "hair-back",
+      "name": "金色长发后束",
+      "file": "./assets/hair-long-back.png",
+      "box": [
+        305,
+        125,
+        320,
+        500
+      ],
+      "facing": "right-three-quarter"
+    },
+    {
+      "id": "outer-back-none",
+      "kind": "outer-back",
+      "name": "无后衬",
+      "empty": true,
+      "box": [
+        302,
+        292,
+        366,
+        892
+      ],
+      "facing": "right-three-quarter"
+    },
+    {
+      "id": "outer-trench-lining",
+      "kind": "outer-back",
+      "name": "风衣后背内衬",
+      "file": "./assets/outer-trench-lining.png",
+      "box": [
+        302,
+        292,
+        366,
+        892
+      ],
+      "clipToParent": true,
       "facing": "right-three-quarter"
     }
   ],
@@ -483,6 +569,8 @@
   "defaults": {
     "body": "skin",
     "head": "head-base",
-    "neck": "neck-base"
+    "neck": "neck-base",
+    "hair-back": "hair-back-none",
+    "outer-back": "outer-back-none"
   }
 }

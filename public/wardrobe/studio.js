@@ -1,14 +1,15 @@
-import { CATEGORIES, CALIBRATION_KINDS, DRAW_ORDER, STATE_KEY, getManifest, createState, normalizeState, loadState, saveState, listSavedPresets, savePreset, renderAvatar, renderLayer, selectedAsset, canvasBlob, getAvatarBlob, renderCompositeLayers, importAsset, exportConfig, importConfig } from './avatar-sdk.js?v=20261102-tuning1';
+import { CATEGORIES, CALIBRATION_KINDS, BACK_PARENTS, DRAW_ORDER, STATE_KEY, getManifest, createState, normalizeState, loadState, saveState, listSavedPresets, savePreset, renderAvatar, renderLayer, selectedAsset, canvasBlob, getAvatarBlob, renderCompositeLayers, importAsset, exportConfig, importConfig } from './avatar-sdk.js?v=20261102-backlayers1';
 import { makeZip } from './zip.js';
 import { icon, iconize } from './icons.js';
-const labels = { hair: '发型', top: '内搭', outer: '外套', pants: '裤装', shoes: '鞋履', body: '手臂', head: '头部', neck: '颈部' };
+const labels = { hair: '发型', 'hair-back':'后发', 'outer-back':'后衬', top: '内搭', outer: '外套', pants: '裤装', shoes: '鞋履', body: '手臂', head: '头部', neck: '颈部' };
 const $ = id => document.getElementById(id);
 const clone = value => JSON.parse(JSON.stringify(value));
 let manifest, state, saveTimer, toastTimer;
 let selectedKind = 'hair', view = 'room', zoom = 1, renderVersion = 0;
 let saveQueue = Promise.resolve();
 let savedPresets = [], presetBusy = false;
-const LIBRARY_KINDS = ['hair', 'head', 'neck', 'top', 'outer', 'pants', 'shoes'];
+const LIBRARY_KINDS = ['hair', 'hair-back', 'head', 'neck', 'top', 'outer', 'outer-back', 'pants', 'shoes'];
+const freshLayer=(id,kind)=>({id,tint:null,x:0,y:0,scale:1,scaleX:1,scaleY:1,opacity:1,visible:true,fit:'part',followParent:!!BACK_PARENTS[kind]});
 const decimal = value => Number(value.toFixed(1));
 const swatches = [null, '#292c2d', '#78614d', '#d1b17d', '#6b775c', '#9582ac'];
 function toast(message) { clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false; toastTimer = setTimeout(() => { $('toast').hidden = true; }, 3400); }
@@ -24,8 +25,14 @@ async function assetThumb(asset, canvas) {
   const preview = createState(manifest); preview.customAssets = clone(state.customAssets);
   if (asset.kind === 'top' || asset.kind === 'body') preview.layers.outer.id = 'none';
   if (asset.kind === 'body') preview.layers.top.visible = false;
-  preview.layers[asset.kind] = { id: asset.id, tint: null, x: 0, y: 0, scale: 1, opacity: 1, visible: true, fit: 'part' };
-  const result = await renderLayer(asset.kind, preview, manifest);
+  preview.layers[asset.kind] = freshLayer(asset.id,asset.kind);
+  if(BACK_PARENTS[asset.kind])preview.layers[asset.kind].followParent=false;
+  let result = await renderLayer(asset.kind, preview, manifest);
+  if(asset.kind==='hair'&&asset.backAsset){
+    preview.layers['hair-back']=freshLayer(asset.backAsset,'hair-back');
+    const rear=await renderLayer('hair-back',preview,manifest),joined=document.createElement('canvas');joined.width=result.width;joined.height=result.height;
+    joined.getContext('2d').drawImage(rear,0,0);joined.getContext('2d').drawImage(result,0,0);result=joined;
+  }
   fitDrawing(canvas, result, asset.thumbBox || asset.box || manifest.slots[asset.kind], asset.kind === 'hair' ? 18 : 12);
 }
 function updateLookLabel() {
@@ -48,13 +55,14 @@ function renderLibrary() {
   $('asset-grid').replaceChildren(...assets.map(asset => {
     const button = element('button', 'asset-card'); button.type = 'button'; button.setAttribute('aria-label', `选择${asset.name}`); button.setAttribute('aria-pressed', String(state.layers[selectedKind].id === asset.id)); button.dataset.asset = asset.id;
     const thumb = element('div', 'thumb');
-    if (asset.id === 'none') { const empty = element('span', 'empty-asset'); empty.innerHTML = icon('close'); thumb.append(empty); }
+    if (asset.id === 'none'||asset.empty) { const empty = element('span', 'empty-asset'); empty.innerHTML = icon('close'); thumb.append(empty); }
     else { const canvas = document.createElement('canvas'); canvas.width = 220; canvas.height = 225; thumb.append(canvas); void assetThumb(asset, canvas).catch(error => { button.title = error.message; thumb.textContent = '素材加载失败'; }); }
     const tag = element('span', 'asset-tag', asset.id.startsWith('user-') ? 'YOUR PNG' : 'ORIGINAL'); const check = element('span', 'check'); check.innerHTML = icon('check');
     button.append(thumb, tag, check, element('span', 'card-text', asset.name));
     button.addEventListener('click', () => {
       if (state.layers[selectedKind].id === asset.id) return;
-      state.layers[selectedKind] = { id: asset.id, tint: null, x: 0, y: 0, scale: 1, opacity: 1, visible: true, fit: 'part' };
+      state.layers[selectedKind] = freshLayer(asset.id,selectedKind);
+      for(const [rear,parent] of Object.entries(BACK_PARENTS))if(parent===selectedKind)state.layers[rear]=freshLayer(asset.backAsset||manifest.defaults[rear],rear);
       changed(); updateLibrarySelection(); renderInspector();
     }); return button;
   }));
@@ -72,14 +80,16 @@ function renderInspector() {
   for (const id of ['part-x', 'part-y']) { $(id).min = calibration ? -400 : -150; $(id).max = calibration ? 400 : 150; }
   $('axis-size-fields').hidden = !calibration;
   $('part-width').value = decimal((layer.scaleX ?? 1) * 100); $('part-height').value = decimal((layer.scaleY ?? 1) * 100);
-  $('calibration-note').textContent = calibration ? `${labels[selectedKind]}独立调整 · X/Y 为原画偏移，宽高可分别修改。` : 'X/Y 为原画偏移，整体缩放保持部件比例。';
+  $('calibration-note').textContent = BACK_PARENTS[selectedKind]&&layer.followParent ? `跟随${labels[BACK_PARENTS[selectedKind]]} · 下面的参数用于后层的额外微调。` : calibration ? `${labels[selectedKind]}独立调整 · X/Y 为原画偏移，宽高可分别修改。` : 'X/Y 为原画偏移，整体缩放保持部件比例。';
+  $('follow-parent-row').hidden=!BACK_PARENTS[selectedKind];$('follow-parent').checked=layer.followParent!==false;
+  $('follow-parent-label').textContent=BACK_PARENTS[selectedKind]?`跟随${labels[BACK_PARENTS[selectedKind]]}的位置、缩放与显隐`:'跟随前层';
   $('part-x').value = layer.x; $('part-y').value = layer.y; $('part-opacity').value = Math.round(layer.opacity * 100); $('opacity-value').textContent = `${Math.round(layer.opacity * 100)}%`;
   $('color-label').textContent = layer.tint?.toUpperCase() || '原画配色'; $('custom-color').value = layer.tint || '#5b5d50'; $('asset-fit-row').hidden = !asset?.id.startsWith('user-'); $('asset-fit').value = layer.fit;
   for (const [index, node] of [...$('color-swatches').children].entries()) node.setAttribute('aria-pressed', String(layer.tint === swatches[index]));
   renderLayers();
 }
 function renderLayers() {
-  $('layer-count').textContent = `${DRAW_ORDER.filter(kind => state.layers[kind].visible && state.layers[kind].id !== 'none').length} LAYERS`;
+  $('layer-count').textContent = `${DRAW_ORDER.filter(kind => state.layers[kind].visible && state.layers[kind].id !== 'none'&&!selectedAsset(manifest,state,kind)?.empty).length} / ${DRAW_ORDER.length} 层`;
   $('layer-list').replaceChildren(...[...DRAW_ORDER].reverse().map(kind => {
     const layer = state.layers[kind], asset = selectedAsset(manifest, state, kind);
     const row = element('div', `layer-row${kind === selectedKind ? ' selected' : ''}${!layer.visible ? ' is-hidden' : ''}`);
@@ -98,10 +108,11 @@ async function renderMain() {
 }
 async function renderExploded() {
   const current = clone(state);
-  $('exploded-grid').replaceChildren(...['hair', 'head', 'neck', 'body', 'top', 'outer', 'pants', 'shoes'].map((kind, index) => {
+  $('exploded-grid').replaceChildren(...['hair', 'hair-back', 'head', 'neck', 'body', 'top', 'outer', 'outer-back', 'pants', 'shoes'].map((kind, index) => {
     const button = element('button', `exploded-card${selectedKind === kind ? ' active' : ''}`), canvas = document.createElement('canvas'); canvas.width = 260; canvas.height = 360;
-    button.append(element('small', '', `0${index + 1} / PNG`), canvas, element('span', '', labels[kind])); button.addEventListener('click', () => selectKind(kind));
+    button.append(element('small', '', `${String(index+1).padStart(2,'0')} / PNG`), canvas, element('span', '', labels[kind])); button.addEventListener('click', () => selectKind(kind));
     const preview = clone(current);
+    if(BACK_PARENTS[kind])preview.layers[kind].followParent=false;
     if (kind === 'top' || kind === 'body') preview.layers.outer.visible = false;
     if (kind === 'body') preview.layers.top.visible = false;
     void renderLayer(kind, preview, manifest).then(result => { const asset = selectedAsset(manifest, current, kind); fitDrawing(canvas, result, asset?.box || manifest.slots[kind], 14); }).catch(error => { button.title = error.message; }); return button;
@@ -205,7 +216,8 @@ function wireControls() {
   numericControl('part-x', 'x'); numericControl('part-y', 'y'); numericControl('part-width', 'scaleX', 100); numericControl('part-height', 'scaleY', 100);
   $('part-opacity').addEventListener('input', event => { state.layers[selectedKind].opacity = Number(event.target.value) / 100; $('opacity-value').textContent = `${event.target.value}%`; changed(); });
   $('asset-fit').addEventListener('change', event => { state.layers[selectedKind].fit = event.target.value; changed(); });
-  $('reset-layer').addEventListener('click', () => { const current = state.layers[selectedKind]; state.layers[selectedKind] = { id: current.id, tint: null, x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, opacity: 1, visible: true, fit: 'part' }; changed(); renderInspector(); toast('已还原当前部件的颜色与位置'); });
+  $('reset-layer').addEventListener('click', () => { state.layers[selectedKind] = freshLayer(state.layers[selectedKind].id,selectedKind); changed(); renderInspector(); toast('已还原当前部件的颜色与位置'); });
+  $('follow-parent').addEventListener('change',event=>{state.layers[selectedKind].followParent=event.target.checked;changed();renderInspector();});
   $('save-look').addEventListener('click', safely(openPresetDialog)); $('preset-open').addEventListener('click', safely(openPresetDialog));
   $('preset-close').addEventListener('click', () => $('preset-dialog').close());
   $('preset-save-new').addEventListener('click', () => void storeNamedPreset()); $('preset-update').addEventListener('click', () => void storeNamedPreset(true));
@@ -223,7 +235,7 @@ function wireControls() {
   $('help-dialog').addEventListener('click', event => { if (event.target === $('help-dialog')) { const r = $('help-dialog').getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) $('help-dialog').close(); } });
   $('asset-upload').addEventListener('change', safely(async event => {
     const file = event.target.files[0]; event.target.value = ''; if (!file) return; const asset = await importAsset(file, selectedKind); state.customAssets[asset.id] = asset;
-    state.layers[selectedKind] = { id: asset.id, tint: null, x: 0, y: 0, scale: 1, opacity: 1, visible: true, fit: 'part' }; changed(); renderLibrary(); renderInspector(); toast('已导入 PNG，可在右侧调整大小和位置');
+    state.layers[selectedKind] = freshLayer(asset.id,selectedKind); changed(); renderLibrary(); renderInspector(); toast('已导入 PNG，可在右侧调整大小和位置');
   }));
   $('export-png').addEventListener('click', safely(() => withBusy($('export-png'), async () => { download(await getAvatarBlob(clone(state), manifest), 'luckybreak-character.png'); toast('已导出透明背景完整人物 PNG'); })));
   $('export-config').addEventListener('click', safely(async () => { download(new Blob([JSON.stringify(await exportConfig(clone(state)), null, 2)], { type: 'application/json' }), 'luckybreak-look.json'); toast('配置已导出，包含自定义 PNG 素材'); }));

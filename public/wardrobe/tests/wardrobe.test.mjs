@@ -26,10 +26,20 @@ test('legacy skin transforms migrate to independently editable head, neck and ar
   }
 });
 test('rear collars, neck, front garments and head have an explicit physical order',()=>{
-  for(const rear of ['top-back','outer-back'])assert(COMPOSITE_ORDER.indexOf(rear)<COMPOSITE_ORDER.indexOf('neck'));
+  for(const rear of ['top-collar-back','outer-collar-back'])assert(COMPOSITE_ORDER.indexOf(rear)<COMPOSITE_ORDER.indexOf('neck'));
+  for(const rear of ['hair-back','outer-back'])assert(COMPOSITE_ORDER.indexOf(rear)<COMPOSITE_ORDER.indexOf('body'));
   for(const front of ['top','outer'])assert(COMPOSITE_ORDER.indexOf('neck')<COMPOSITE_ORDER.indexOf(front));
   assert(COMPOSITE_ORDER.indexOf('outer')<COMPOSITE_ORDER.indexOf('head'));
-  for(const id of ['top-shirt','top-formal'])assert.equal(manifest.assets.find(a=>a.id===id).mirrorX,true);
+  for(const id of ['top-shirt','top-formal'])assert.equal(manifest.assets.find(a=>a.id===id).facing,'right-three-quarter');
+});
+test('older eight-layer looks gain the correct paired rear pieces without resetting manual alignment',()=>{
+  const look=createState(manifest,'trench');look.presetId='custom';look.layers.hair.id='hair-blonde-long';look.layers.neck.y=-17.5;
+  delete look.layers['hair-back'];delete look.layers['outer-back'];
+  const updated=normalizeState(look,manifest);
+  assert.equal(updated.layers['hair-back'].id,'hair-long-back');assert.equal(updated.layers['outer-back'].id,'outer-trench-lining');
+  assert.equal(updated.layers.neck.y,-17.5);assert.equal(updated.layers['hair-back'].followParent,true);
+  const independent=structuredClone(updated);Object.assign(independent.layers['hair-back'],{followParent:false,x:42.5,scaleX:1.12});
+  assert.deepEqual(normalizeState(independent,manifest),independent);
 });
 test('untrusted config cannot substitute cross-category assets, remote URLs, or unbounded transforms', () => {
   const input = createState(manifest);

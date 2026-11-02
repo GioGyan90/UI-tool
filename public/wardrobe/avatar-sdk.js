@@ -1,8 +1,9 @@
 /** Lucky Break layered avatar SDK. No framework or remote service required. */
-export const CATEGORIES = ['hair', 'top', 'outer', 'pants', 'shoes'];
-export const CALIBRATION_KINDS = ['hair', 'head', 'neck'];
-export const DRAW_ORDER = ['shoes', 'pants', 'body', 'neck', 'top', 'outer', 'head', 'hair'];
-export const COMPOSITE_ORDER = ['shoes', 'pants', 'body', 'top-back', 'outer-back', 'neck', 'top', 'outer', 'head', 'hair'];
+export const CATEGORIES = ['hair', 'top', 'outer', 'pants', 'shoes', 'hair-back', 'outer-back'];
+export const BACK_PARENTS = {'hair-back':'hair', 'outer-back':'outer'};
+export const CALIBRATION_KINDS = ['hair', 'head', 'neck', 'hair-back', 'outer-back'];
+export const DRAW_ORDER = ['hair-back', 'outer-back', 'shoes', 'pants', 'body', 'neck', 'top', 'outer', 'head', 'hair'];
+export const COMPOSITE_ORDER = ['hair-back', 'outer-back', 'shoes', 'pants', 'body', 'top-collar-back', 'outer-collar-back', 'neck', 'top', 'outer', 'head', 'hair'];
 const LAYER_KINDS = ['body', 'head', 'neck', ...CATEGORIES];
 export const STATE_KEY = 'luckybreak.wardrobe.v1';
 const DB_NAME = 'luckybreak-wardrobe';
@@ -17,7 +18,7 @@ const number = (v, fallback, min, max) => Number.isFinite(Number(v)) ? Math.min(
 const copy = value => JSON.parse(JSON.stringify(value));
 
 export async function getManifest() {
-  manifestPromise ||= fetch(new URL('./manifest.json?v=20261102-tuning1', import.meta.url)).then(response => {
+  manifestPromise ||= fetch(new URL('./manifest.json?v=20261102-backlayers1', import.meta.url)).then(response => {
     if (!response.ok) throw new Error('素材清单读取失败，请刷新重试。');
     return response.json();
   }).catch(error => { manifestPromise = undefined; throw error; });
@@ -26,10 +27,12 @@ export async function getManifest() {
 
 export function createState(manifest, presetId = 'night') {
   const preset = manifest.presets.find(item => item.id === presetId) || manifest.presets[0];
-  const state = { version: 1, rigVersion: 3, presetId: preset.id, savedPresetId: null, lookName: null, modifiedAt: new Date().toISOString(), layers: {}, customAssets: {} };
+  const state = { version: 1, rigVersion: 4, presetId: preset.id, savedPresetId: null, lookName: null, modifiedAt: new Date().toISOString(), layers: {}, customAssets: {} };
   for (const kind of LAYER_KINDS) {
-    const selection = preset.layers[kind] || { id: manifest.defaults?.[kind] || (kind === 'body' ? 'skin' : undefined) };
-    state.layers[kind] = { id: selection.id, tint: selection.tint || null, x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, opacity: 1, visible: true, fit: 'part' };
+    const parent = BACK_PARENTS[kind];
+    const paired = parent && manifest.assets.find(a => a.id === state.layers[parent]?.id)?.backAsset;
+    const selection = preset.layers[kind] || { id: paired || manifest.defaults?.[kind] || (kind === 'body' ? 'skin' : undefined) };
+    state.layers[kind] = { id: selection.id, tint: selection.tint || null, x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, opacity: 1, visible: true, fit: 'part', followParent: !!parent };
   }
   return state;
 }
@@ -70,8 +73,12 @@ export function normalizeState(input, manifest) {
       scaleX: calibration ? number(layer.scaleX, 1, .5, 2) : 1,
       scaleY: calibration ? number(layer.scaleY, 1, .5, 2) : 1,
       opacity: number(layer.opacity, 1, 0, 1),
+      followParent: !!BACK_PARENTS[kind] && layer.followParent !== false,
       visible: layer.visible !== false, fit: layer.fit === 'canvas' ? 'canvas' : 'part',
     };
+  }
+  for (const [kind, parent] of Object.entries(BACK_PARENTS)) if (!input.layers[kind]) {
+    state.layers[kind].id = manifest.assets.find(a => a.id === state.layers[parent].id)?.backAsset || manifest.defaults[kind];
   }
   return state;
 }
@@ -211,10 +218,11 @@ export function selectedAsset(manifest, state, kind) {
   return manifest.assets.find(asset => asset.id === id && asset.kind === kind) || state.customAssets[id] || null;
 }
 
-async function loadImage(asset) {
-  if (asset.id === 'none') return null;
-  if (!imageCache.has(asset.id)) {
-    imageCache.set(asset.id, (async () => {
+async function loadImage(asset, version = '') {
+  if (asset.id === 'none' || asset.empty) return null;
+  const cacheKey=asset.id.startsWith('user-')?asset.id:`${asset.id}@${version}`;
+  if (!imageCache.has(cacheKey)) {
+    imageCache.set(cacheKey, (async () => {
       let objectUrl;
       let source;
       if (asset.id.startsWith('user-')) {
@@ -223,7 +231,7 @@ async function loadImage(asset) {
         objectUrl = URL.createObjectURL(blob);
         source = objectUrl;
       } else {
-        source = new URL(asset.file, import.meta.url).href;
+        const url=new URL(asset.file, import.meta.url);if(version)url.searchParams.set('v',version);source=url.href;
       }
       try {
         const image = new Image();
@@ -233,13 +241,13 @@ async function loadImage(asset) {
         return image;
       } catch { throw new Error(`素材「${asset.name}」加载失败，请检查网络后重试。`); }
       finally { if (objectUrl) URL.revokeObjectURL(objectUrl); }
-    })().catch(error => { imageCache.delete(asset.id); throw error; }));
+    })().catch(error => { imageCache.delete(cacheKey); throw error; }));
   }
-  return imageCache.get(asset.id);
+  return imageCache.get(cacheKey);
 }
 
 export async function preloadAssets(manifest, ids) {
-  await Promise.all(manifest.assets.filter(asset => ids.includes(asset.id)).map(loadImage));
+  await Promise.all(manifest.assets.filter(asset => ids.includes(asset.id)).map(asset=>loadImage(asset,manifest.version)));
 }
 
 export function makeCanvas(manifest) {
@@ -276,14 +284,17 @@ export async function renderLayer(kind, state, manifest) {
   manifest ||= await getManifest();
   const layer = state.layers[kind];
   const asset = selectedAsset(manifest, state, kind);
-  if (!layer || !asset || !layer.visible || layer.opacity === 0 || asset.id === 'none') return makeCanvas(manifest);
+  if (!layer || !asset || !layer.visible || layer.opacity === 0 || asset.id === 'none' || asset.empty) return makeCanvas(manifest);
+  const parentKind = BACK_PARENTS[kind], parent = parentKind && layer.followParent ? state.layers[parentKind] : null;
+  const parentAsset = parent && selectedAsset(manifest, state, parentKind);
+  if (parent && (!parentAsset || !parent.visible || parent.opacity === 0 || parentAsset.id === 'none' || parentAsset.empty)) return makeCanvas(manifest);
   const outer = selectedAsset(manifest, state, 'outer');
   const top = selectedAsset(manifest, state, 'top');
   const longSleeve = (state.layers.outer.visible && state.layers.outer.opacity > 0 && outer && outer.id !== 'none') || (state.layers.top.visible && state.layers.top.opacity > 0 && top?.sleeve === 'long');
-  const key = JSON.stringify([manifest.version, kind, layer, kind === 'body' && longSleeve, kind === 'top' ? state.layers.outer : null]);
+  const key = JSON.stringify([manifest.version, kind, layer, parent, kind === 'body' && longSleeve, kind === 'top' ? state.layers.outer : null]);
   if (layerCache.has(key)) return layerCache.get(key);
   const canvas = makeCanvas(manifest);
-  const image = await loadImage(asset);
+  const image = await loadImage(asset,manifest.version);
   if (!image) return canvas;
   const context = canvas.getContext('2d');
   let box = asset.box || manifest.slots[kind];
@@ -296,6 +307,13 @@ export async function renderLayer(kind, state, manifest) {
     }
   }
   const [x, y, width, height] = box;
+  if (parent) {
+    const pbox = parentAsset.id.startsWith('user-') && parent.fit === 'canvas' ? [0,0,manifest.width,manifest.height] : parentAsset.box || manifest.slots[parentKind];
+    const px=pbox[0]+pbox[2]/2, py=pbox[1]+pbox[3]/2;
+    context.translate(px+parent.x,py+parent.y);
+    context.scale(parent.scale*(parent.scaleX??1)*(parentAsset.mirrorX?-1:1),parent.scale*(parent.scaleY??1));
+    context.translate(-px,-py);
+  }
   context.translate(x + width / 2 + layer.x, y + height / 2 + layer.y);
   context.scale(layer.scale * (layer.scaleX ?? 1) * (asset.mirrorX ? -1 : 1), layer.scale * (layer.scaleY ?? 1));
   if (kind === 'body' && longSleeve) {
@@ -305,7 +323,19 @@ export async function renderLayer(kind, state, manifest) {
   }
   context.drawImage(image, -width / 2, -height / 2, width, height);
   context.resetTransform();
-  if (layer.tint) tintCanvas(canvas, layer.tint);
+  const color=layer.tint || parent?.tint;
+  if (color) tintCanvas(canvas, color);
+  if (parent && asset.clipToParent) {
+    const front=await renderLayer(parentKind,state,manifest),fp=front.getContext('2d').getImageData(0,0,canvas.width,canvas.height);
+    const mask=makeCanvas(manifest),mc=mask.getContext('2d');
+    mc.fillStyle='#fff';
+    for(let y=0;y<canvas.height;y++){
+      let left=canvas.width,right=-1;
+      for(let x=0;x<canvas.width;x++)if(fp.data[(y*canvas.width+x)*4+3]>0){left=Math.min(left,x);right=x;}
+      if(right>=left)mc.fillRect(left,y,right-left+1,1);
+    }
+    context.globalCompositeOperation='destination-in';context.drawImage(mask,0,0);context.globalCompositeOperation='source-over';
+  }
   if (kind === 'top' && state.layers.outer.visible && state.layers.outer.opacity > 0 && outer?.id !== 'none') {
     // Fit an inner garment inside the outer silhouette while preserving its open front.
     const jacket = await renderLayer('outer', state, manifest);
@@ -339,14 +369,15 @@ export async function renderLayer(kind, state, manifest) {
     maskContext.putImageData(maskPixels, 0, 0);
     context.globalCompositeOperation = 'destination-in'; context.drawImage(mask, 0, 0); context.globalCompositeOperation = 'source-over';
   }
-  if (layer.opacity < 1) {
+  const opacity=layer.opacity*(parent?.opacity??1);
+  if (opacity < 1) {
     context.globalCompositeOperation = 'destination-in';
-    context.fillStyle = `rgba(0,0,0,${layer.opacity})`;
+    context.fillStyle = `rgba(0,0,0,${opacity})`;
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.globalCompositeOperation = 'source-over';
   }
   layerCache.set(key, canvas);
-  if (layerCache.size > 8) layerCache.delete(layerCache.keys().next().value);
+  if (layerCache.size > 12) layerCache.delete(layerCache.keys().next().value);
   return canvas;
 }
 
@@ -358,7 +389,7 @@ async function splitCollar(full, kind, state, manifest) {
   const fc=front.getContext('2d');fc.drawImage(full,0,0);
   if(!asset?.rearCollar || !layer.visible || asset.id==='none') return {back,front};
   const mask=makeCanvas(manifest), mc=mask.getContext('2d');
-  const image=await loadImage({id:asset.id+'-rear-mask',name:asset.name+'后领',file:asset.rearCollar.file});
+  const image=await loadImage({id:asset.id+'-rear-mask',name:asset.name+'后领',file:asset.rearCollar.file},manifest.version);
   const [x,y,w,h]=asset.box;
   mc.translate(x+w/2+layer.x,y+h/2+layer.y);
   mc.scale(layer.scale*(asset.mirrorX?-1:1),layer.scale);
@@ -381,12 +412,13 @@ async function splitCollar(full, kind, state, manifest) {
 /** Actual paint/export stack: rear collars, independent neck, front garments, head. */
 export async function renderCompositeLayers(state, manifest) {
   manifest ||= await getManifest();
-  if(!state.layers.head || !state.layers.neck) state=normalizeState(state,manifest);
-  const layers = await Promise.all(DRAW_ORDER.map(async kind => [kind, await renderLayer(kind, state, manifest)]));
+  if(DRAW_ORDER.some(kind=>!state.layers[kind])) state=normalizeState(state,manifest);
+  const layers = await Promise.all(DRAW_ORDER.filter(kind=>!BACK_PARENTS[kind]).map(async kind => [kind, await renderLayer(kind, state, manifest)]));
+  layers.push(...await Promise.all(Object.keys(BACK_PARENTS).map(async kind=>[kind,await renderLayer(kind,state,manifest)])));
   const canvases=Object.fromEntries(layers);
   for(const kind of ['top','outer']) {
     const {back,front}=await splitCollar(canvases[kind],kind,state,manifest);
-    canvases[kind+'-back']=back;canvases[kind]=front;
+    canvases[kind+'-collar-back']=back;canvases[kind]=front;
   }
   return COMPOSITE_ORDER.map(kind=>({kind,canvas:canvases[kind]}));
 }
