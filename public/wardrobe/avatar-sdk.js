@@ -1,5 +1,6 @@
 /** Lucky Break layered avatar SDK. No framework or remote service required. */
 export const CATEGORIES = ['hair', 'top', 'outer', 'pants', 'shoes'];
+export const CALIBRATION_KINDS = ['hair', 'head', 'neck'];
 export const DRAW_ORDER = ['shoes', 'pants', 'body', 'neck', 'top', 'outer', 'head', 'hair'];
 export const COMPOSITE_ORDER = ['shoes', 'pants', 'body', 'top-back', 'outer-back', 'neck', 'top', 'outer', 'head', 'hair'];
 const LAYER_KINDS = ['body', 'head', 'neck', ...CATEGORIES];
@@ -16,7 +17,7 @@ const number = (v, fallback, min, max) => Number.isFinite(Number(v)) ? Math.min(
 const copy = value => JSON.parse(JSON.stringify(value));
 
 export async function getManifest() {
-  manifestPromise ||= fetch(new URL('./manifest.json?v=20261102-neck2', import.meta.url)).then(response => {
+  manifestPromise ||= fetch(new URL('./manifest.json?v=20261102-tuning1', import.meta.url)).then(response => {
     if (!response.ok) throw new Error('素材清单读取失败，请刷新重试。');
     return response.json();
   }).catch(error => { manifestPromise = undefined; throw error; });
@@ -25,10 +26,10 @@ export async function getManifest() {
 
 export function createState(manifest, presetId = 'night') {
   const preset = manifest.presets.find(item => item.id === presetId) || manifest.presets[0];
-  const state = { version: 1, rigVersion: 2, presetId: preset.id, modifiedAt: new Date().toISOString(), layers: {}, customAssets: {} };
+  const state = { version: 1, rigVersion: 3, presetId: preset.id, savedPresetId: null, lookName: null, modifiedAt: new Date().toISOString(), layers: {}, customAssets: {} };
   for (const kind of LAYER_KINDS) {
     const selection = preset.layers[kind] || { id: manifest.defaults?.[kind] || (kind === 'body' ? 'skin' : undefined) };
-    state.layers[kind] = { id: selection.id, tint: selection.tint || null, x: 0, y: 0, scale: 1, opacity: 1, visible: true, fit: 'part' };
+    state.layers[kind] = { id: selection.id, tint: selection.tint || null, x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, opacity: 1, visible: true, fit: 'part' };
   }
   return state;
 }
@@ -37,6 +38,8 @@ export function normalizeState(input, manifest) {
   if (!input || input.version !== 1 || !input.layers || typeof input.layers !== 'object') throw new Error('配置格式不兼容，需要版本 1 的人物造型配置。');
   const state = createState(manifest, input.presetId);
   state.presetId = manifest.presets.some(p => p.id === input.presetId) ? input.presetId : 'custom';
+  state.savedPresetId = /^look-[\w-]{1,80}$/.test(input.savedPresetId || '') ? input.savedPresetId : null;
+  state.lookName = typeof input.lookName === 'string' ? input.lookName.trim().slice(0, 40) || null : null;
   state.modifiedAt = typeof input.modifiedAt === 'string' && !Number.isNaN(Date.parse(input.modifiedAt)) ? input.modifiedAt : new Date().toISOString();
   const custom = input.customAssets && typeof input.customAssets === 'object' ? input.customAssets : {};
   for (const [id, asset] of Object.entries(custom).slice(0, 40)) {
@@ -57,11 +60,16 @@ export function normalizeState(input, manifest) {
     const validBuiltin = manifest.assets.some(asset => asset.id === layer.id && asset.kind === kind);
     const validCustom = state.customAssets[layer.id]?.kind === kind;
     const id = validBuiltin || validCustom ? layer.id : state.layers[kind].id;
+    const calibration = CALIBRATION_KINDS.includes(kind);
     state.layers[kind] = {
       id,
       tint: /^#[\da-f]{6}$/i.test(layer.tint || '') ? layer.tint.toLowerCase() : null,
-      x: number(layer.x, 0, -150, 150), y: number(layer.y, 0, -150, 150),
-      scale: number(layer.scale, 1, .75, 1.25), opacity: number(layer.opacity, 1, 0, 1),
+      x: number(layer.x, 0, calibration ? -400 : -150, calibration ? 400 : 150),
+      y: number(layer.y, 0, calibration ? -400 : -150, calibration ? 400 : 150),
+      scale: number(layer.scale, 1, calibration ? .25 : .75, calibration ? 2.5 : 1.25),
+      scaleX: calibration ? number(layer.scaleX, 1, .5, 2) : 1,
+      scaleY: calibration ? number(layer.scaleY, 1, .5, 2) : 1,
+      opacity: number(layer.opacity, 1, 0, 1),
       visible: layer.visible !== false, fit: layer.fit === 'canvas' ? 'canvas' : 'part',
     };
   }
@@ -132,6 +140,44 @@ export async function saveState(state, manifest) {
   try { localStorage.setItem(STATE_KEY, JSON.stringify(value)); } catch { /* IndexedDB is the durable source. */ }
   broadcast(value);
   return value;
+}
+
+/** A named preset is a snapshot, separate from the automatically saved current look. */
+export function createSavedPreset(state, name, manifest, previous = null) {
+  name = String(name || '').trim().slice(0, 40);
+  if (!name) throw new Error('请先输入预设名称。');
+  const id = previous?.id || `look-${crypto.randomUUID?.() || Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+  if (!/^look-[\w-]{1,80}$/.test(id)) throw new Error('预设编号无效。');
+  const now = new Date().toISOString();
+  const snapshot = normalizeState(state, manifest);
+  snapshot.presetId = 'custom'; snapshot.savedPresetId = id; snapshot.lookName = name;
+  return { format: 'luckybreak-saved-look', id, name, createdAt: previous?.createdAt || now, updatedAt: now, state: snapshot };
+}
+
+export async function listSavedPresets(manifest) {
+  manifest ||= await getManifest();
+  const db = await database();
+  const records = await new Promise((resolve, reject) => {
+    const request = db.transaction('state', 'readonly').objectStore('state').getAll();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  return records.filter(record => record?.format === 'luckybreak-saved-look' && /^look-[\w-]{1,80}$/.test(record.id || '')).flatMap(record => {
+    try { return [{ ...record, name: String(record.name || '未命名预设').slice(0, 40), state: normalizeState(record.state, manifest) }]; }
+    catch { return []; }
+  }).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+}
+
+export async function savePreset(state, name, { id = null, manifest } = {}) {
+  manifest ||= await getManifest();
+  const snapshot = normalizeState(state, manifest);
+  if (id && !/^look-[\w-]{1,80}$/.test(id)) throw new Error('预设编号无效。');
+  const previous = id ? await dbGet('state', `preset:${id}`) : null;
+  if (id && previous?.format !== 'luckybreak-saved-look') throw new Error('找不到所选预设，请重新选择。');
+  const record = createSavedPreset(snapshot, name, manifest, previous);
+  // Each preset has its own IndexedDB key, so saving another preset cannot replace it.
+  await dbPut('state', `preset:${record.id}`, record);
+  return record;
 }
 
 /** Same-origin pages/tabs receive the current saved composition. Returns unsubscribe. */
@@ -251,7 +297,7 @@ export async function renderLayer(kind, state, manifest) {
   }
   const [x, y, width, height] = box;
   context.translate(x + width / 2 + layer.x, y + height / 2 + layer.y);
-  context.scale(layer.scale * (asset.mirrorX ? -1 : 1), layer.scale);
+  context.scale(layer.scale * (layer.scaleX ?? 1) * (asset.mirrorX ? -1 : 1), layer.scale * (layer.scaleY ?? 1));
   if (kind === 'body' && longSleeve) {
     context.beginPath();
     for (const [cx,cy,cw,ch] of manifest.bodyLongSleeveClips) context.rect(cx-x-width/2,cy-y-height/2,cw,ch);
@@ -425,5 +471,5 @@ export async function importConfig(config, manifest) {
 }
 
 /** Framework-free integration: import SDK, loadState, renderAvatar, subscribeAvatar. */
-export const LuckyBreakAvatar = { getManifest, loadState, saveState, renderAvatar, renderLayer, renderCompositeLayers, getAvatarBlob, subscribeAvatar, createState, exportConfig, importConfig };
+export const LuckyBreakAvatar = { getManifest, loadState, saveState, renderAvatar, renderLayer, renderCompositeLayers, getAvatarBlob, subscribeAvatar, createState, listSavedPresets, savePreset, exportConfig, importConfig };
 if (typeof window !== 'undefined') window.LuckyBreakAvatar = LuckyBreakAvatar;

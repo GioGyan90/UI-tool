@@ -1,4 +1,4 @@
-import { CATEGORIES, DRAW_ORDER, STATE_KEY, getManifest, createState, normalizeState, loadState, saveState, renderAvatar, renderLayer, selectedAsset, canvasBlob, getAvatarBlob, renderCompositeLayers, importAsset, exportConfig, importConfig } from './avatar-sdk.js?v=20261102-neck2';
+import { CATEGORIES, CALIBRATION_KINDS, DRAW_ORDER, STATE_KEY, getManifest, createState, normalizeState, loadState, saveState, listSavedPresets, savePreset, renderAvatar, renderLayer, selectedAsset, canvasBlob, getAvatarBlob, renderCompositeLayers, importAsset, exportConfig, importConfig } from './avatar-sdk.js?v=20261102-tuning1';
 import { makeZip } from './zip.js';
 import { icon, iconize } from './icons.js';
 const labels = { hair: '发型', top: '内搭', outer: '外套', pants: '裤装', shoes: '鞋履', body: '手臂', head: '头部', neck: '颈部' };
@@ -7,6 +7,9 @@ const clone = value => JSON.parse(JSON.stringify(value));
 let manifest, state, saveTimer, toastTimer;
 let selectedKind = 'hair', view = 'room', zoom = 1, renderVersion = 0;
 let saveQueue = Promise.resolve();
+let savedPresets = [], presetBusy = false;
+const LIBRARY_KINDS = ['hair', 'head', 'neck', 'top', 'outer', 'pants', 'shoes'];
+const decimal = value => Number(value.toFixed(1));
 const swatches = [null, '#292c2d', '#78614d', '#d1b17d', '#6b775c', '#9582ac'];
 function toast(message) { clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false; toastTimer = setTimeout(() => { $('toast').hidden = true; }, 3400); }
 const safely = callback => async event => { try { await callback(event); } catch (error) { console.error(error); toast(error.message || '操作未完成，请重试。'); } };
@@ -29,11 +32,11 @@ function updateLookLabel() {
   const preset = manifest.presets.find(p => p.id === state.presetId);
   $('look-number').textContent = preset ? `LOOK ${preset.number}` : 'YOUR LOOK';
   $('current-look-kicker').textContent = preset ? `${preset.number} / ${preset.english}` : 'A LOOK THAT IS YOURS';
-  $('current-look-name').textContent = preset?.name || '自由混搭';
+  $('current-look-name').textContent = preset?.name || state.lookName || '自由混搭';
   for (const node of $('preset-grid').children) node.setAttribute('aria-pressed', String(node.dataset.preset === state.presetId));
 }
 function renderCategories() {
-  $('category-tabs').replaceChildren(...CATEGORIES.map(kind => {
+  $('category-tabs').replaceChildren(...LIBRARY_KINDS.map(kind => {
     const button = element('button', 'category-tab'); button.type = 'button'; button.innerHTML = icon(kind); button.append(element('span', '', labels[kind]));
     button.setAttribute('role', 'tab'); button.setAttribute('aria-selected', String(kind === selectedKind)); button.dataset.kind = kind;
     button.addEventListener('click', () => selectKind(kind)); return button;
@@ -61,8 +64,15 @@ function updateLibrarySelection() { for (const item of $('asset-grid').children)
 function selectKind(kind) { selectedKind = kind; for (const tab of $('category-tabs').children) tab.setAttribute('aria-selected', String(tab.dataset.kind === kind)); renderLibrary(); renderInspector(); if (view === 'layers') void renderExploded(); }
 function renderInspector() {
   const layer = state.layers[selectedKind], asset = selectedAsset(manifest, state, selectedKind);
+  const calibration = CALIBRATION_KINDS.includes(selectedKind);
   $('piece-icon').innerHTML = icon(selectedKind); $('selected-category').textContent = labels[selectedKind]; $('selected-name').textContent = asset?.name || '无';
-  $('part-scale').value = Math.round(layer.scale * 100); $('scale-value').textContent = `${Math.round(layer.scale * 100)}%`;
+  for (const id of ['part-scale', 'part-scale-number']) {
+    $(id).min = calibration ? 25 : 75; $(id).max = calibration ? 250 : 125; $(id).value = decimal(layer.scale * 100);
+  }
+  for (const id of ['part-x', 'part-y']) { $(id).min = calibration ? -400 : -150; $(id).max = calibration ? 400 : 150; }
+  $('axis-size-fields').hidden = !calibration;
+  $('part-width').value = decimal((layer.scaleX ?? 1) * 100); $('part-height').value = decimal((layer.scaleY ?? 1) * 100);
+  $('calibration-note').textContent = calibration ? `${labels[selectedKind]}独立调整 · X/Y 为原画偏移，宽高可分别修改。` : 'X/Y 为原画偏移，整体缩放保持部件比例。';
   $('part-x').value = layer.x; $('part-y').value = layer.y; $('part-opacity').value = Math.round(layer.opacity * 100); $('opacity-value').textContent = `${Math.round(layer.opacity * 100)}%`;
   $('color-label').textContent = layer.tint?.toUpperCase() || '原画配色'; $('custom-color').value = layer.tint || '#5b5d50'; $('asset-fit-row').hidden = !asset?.id.startsWith('user-'); $('asset-fit').value = layer.fit;
   for (const [index, node] of [...$('color-swatches').children].entries()) node.setAttribute('aria-pressed', String(layer.tint === swatches[index]));
@@ -118,6 +128,56 @@ async function renderPresets() {
   }));
   for(const {preset,canvas,button} of pending){try{fitDrawing(canvas,await renderAvatar(null,createState(manifest,preset.id),manifest),manifest.characterBounds,1);}catch(error){button.title=error.message;}}
 }
+function updatePresetButtons() {
+  const selected = savedPresets.some(record => record.id === $('saved-preset-select').value);
+  $('preset-save-new').disabled = presetBusy;
+  $('preset-update').disabled = presetBusy || !selected;
+  $('preset-apply').disabled = presetBusy || !selected;
+  $('saved-preset-select').disabled = presetBusy || !savedPresets.length;
+  $('preset-name').disabled = presetBusy;
+}
+async function refreshSavedPresets(selectedId = state.savedPresetId) {
+  savedPresets = await listSavedPresets(manifest);
+  const placeholder = element('option', '', savedPresets.length ? '选择一个预设' : '还没有命名预设'); placeholder.value = '';
+  $('saved-preset-select').replaceChildren(placeholder, ...savedPresets.map(record => {
+    const option = element('option', '', record.name); option.value = record.id; return option;
+  }));
+  $('saved-preset-select').value = savedPresets.some(record => record.id === selectedId) ? selectedId : '';
+  $('preset-open').textContent = savedPresets.length ? `我的预设 · ${savedPresets.length}` : '我的预设';
+  updatePresetButtons();
+}
+async function openPresetDialog() {
+  if (presetBusy) return;
+  presetBusy = true; updatePresetButtons();
+  $('preset-name').value = state.lookName || '';
+  $('preset-status').textContent = '正在读取已保存的预设…';
+  $('preset-dialog').showModal();
+  try { await refreshSavedPresets(); $('preset-status').textContent = '预设保存在当前浏览器。跨设备请导出配置 JSON 备份。'; }
+  catch (error) { $('preset-status').textContent = error.message; }
+  finally { presetBusy = false; updatePresetButtons(); $('preset-name').focus(); }
+}
+async function storeNamedPreset(update = false) {
+  presetBusy = true; updatePresetButtons();
+  try {
+    const snapshot = clone(state), id = update ? $('saved-preset-select').value : null;
+    if (update && !id) throw new Error('请先选择要更新的预设。');
+    const record = await savePreset(snapshot, $('preset-name').value, { id, manifest });
+    // Retain any live edits made while IndexedDB was writing the saved snapshot.
+    const newerEdits = snapshot.modifiedAt !== state.modifiedAt;
+    state.savedPresetId = record.id; state.lookName = record.name; state.presetId = 'custom';
+    changed(false); await persist(); await refreshSavedPresets(record.id);
+    $('preset-status').textContent = `${update ? '已更新' : '已保存'}「${record.name}」，包含发型、头部、颈部参数及整套造型。${newerEdits ? '当前又有调整，可再点击更新。' : ''}`;
+    toast(update ? '预设已更新' : '新预设已保存');
+  } catch (error) { $('preset-status').textContent = error.message; }
+  finally { presetBusy = false; updatePresetButtons(); }
+}
+function applySavedPreset() {
+  const record = savedPresets.find(item => item.id === $('saved-preset-select').value);
+  if (!record) return;
+  const customAssets = { ...record.state.customAssets, ...state.customAssets };
+  state = normalizeState({ ...clone(record.state), customAssets }, manifest);
+  changed(false); renderLibrary(); renderInspector(); $('preset-dialog').close(); toast(`已应用「${record.name}」`);
+}
 function download(blob, filename) {
   const url = URL.createObjectURL(blob), anchor = $('download-ready'), previous = anchor.href;
   anchor.href = url; anchor.download = filename; anchor.hidden = false; anchor.textContent = `下载 ${filename}`;
@@ -130,12 +190,32 @@ function wireControls() {
   $('color-swatches').replaceChildren(...swatches.map(color => { const button = element('button', `swatch${color ? '' : ' original'}`); if (color) button.style.setProperty('--swatch', color); button.setAttribute('aria-label', color || '原画颜色'); button.addEventListener('click', () => { state.layers[selectedKind].tint = color; changed(); renderInspector(); }); return button; }));
   $('custom-color').addEventListener('input', event => { state.layers[selectedKind].tint = event.target.value; changed(); $('color-label').textContent = event.target.value.toUpperCase(); for (const node of $('color-swatches').children) node.setAttribute('aria-pressed', 'false'); });
   $('reset-color').addEventListener('click', () => { state.layers[selectedKind].tint = null; changed(); renderInspector(); });
-  $('part-scale').addEventListener('input', event => { state.layers[selectedKind].scale = Number(event.target.value) / 100; $('scale-value').textContent = `${event.target.value}%`; changed(); });
-  for (const [id, key] of [['part-x', 'x'], ['part-y', 'y']]) $(id).addEventListener('input', event => { const value = Number(event.target.value); if (!Number.isFinite(value)) return; state.layers[selectedKind][key] = Math.max(-150, Math.min(150, value)); changed(); });
+  function numericControl(id, key, divisor = 1) {
+    const input = $(id);
+    input.addEventListener('input', () => {
+      if (input.value === '' || !Number.isFinite(input.valueAsNumber)) return;
+      const value = Math.max(Number(input.min), Math.min(Number(input.max), input.valueAsNumber));
+      state.layers[selectedKind][key] = value / divisor;
+      if (key === 'scale') for (const partner of ['part-scale', 'part-scale-number']) if (partner !== id) $(partner).value = decimal(value);
+      changed();
+    });
+    input.addEventListener('change', () => { input.value = decimal(state.layers[selectedKind][key] * divisor); });
+  }
+  for (const id of ['part-scale', 'part-scale-number']) numericControl(id, 'scale', 100);
+  numericControl('part-x', 'x'); numericControl('part-y', 'y'); numericControl('part-width', 'scaleX', 100); numericControl('part-height', 'scaleY', 100);
   $('part-opacity').addEventListener('input', event => { state.layers[selectedKind].opacity = Number(event.target.value) / 100; $('opacity-value').textContent = `${event.target.value}%`; changed(); });
   $('asset-fit').addEventListener('change', event => { state.layers[selectedKind].fit = event.target.value; changed(); });
-  $('reset-layer').addEventListener('click', () => { const current = state.layers[selectedKind]; state.layers[selectedKind] = { id: current.id, tint: null, x: 0, y: 0, scale: 1, opacity: 1, visible: true, fit: 'part' }; changed(); renderInspector(); toast('已还原当前部件的颜色与位置'); });
-  $('save-look').addEventListener('click', safely(() => withBusy($('save-look'), () => persist(true))));
+  $('reset-layer').addEventListener('click', () => { const current = state.layers[selectedKind]; state.layers[selectedKind] = { id: current.id, tint: null, x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, opacity: 1, visible: true, fit: 'part' }; changed(); renderInspector(); toast('已还原当前部件的颜色与位置'); });
+  $('save-look').addEventListener('click', safely(openPresetDialog)); $('preset-open').addEventListener('click', safely(openPresetDialog));
+  $('preset-close').addEventListener('click', () => $('preset-dialog').close());
+  $('preset-save-new').addEventListener('click', () => void storeNamedPreset()); $('preset-update').addEventListener('click', () => void storeNamedPreset(true));
+  $('preset-apply').addEventListener('click', applySavedPreset);
+  $('saved-preset-select').addEventListener('change', () => {
+    const record = savedPresets.find(item => item.id === $('saved-preset-select').value);
+    if (record) $('preset-name').value = record.name;
+    $('preset-status').textContent = record ? '应用可恢复保存的造型；更新会将当前画面和参数写入所选预设。' : '请命名并保存新预设。';
+    updatePresetButtons();
+  });
   for (const button of document.querySelectorAll('[data-view]')) button.addEventListener('click', () => { view = button.dataset.view; $('stage').className = `stage ${view}-mode`; $('exploded-grid').hidden = view !== 'layers'; for (const tab of document.querySelectorAll('[data-view]')) tab.setAttribute('aria-pressed', String(tab === button)); if (view === 'layers') void renderExploded(); });
   function setZoom(value) { zoom = Math.max(.8, Math.min(1.35, value)); $('character-frame').style.setProperty('--zoom', zoom); $('zoom-label').textContent = `${Math.round(zoom * 100)}%`; }
   $('zoom-in').addEventListener('click', () => setZoom(zoom + .05)); $('zoom-out').addEventListener('click', () => setZoom(zoom - .05)); $('reset-camera').addEventListener('click', () => setZoom(1));
@@ -164,6 +244,7 @@ function wireControls() {
 async function init() {
   try {
     manifest = await getManifest(); state = await loadState(manifest); wireControls(); renderCategories(); renderLibrary(); renderInspector(); updateLookLabel(); await renderMain(); renderPresets(); void persist();
+    void refreshSavedPresets().catch(error => { $('preset-open').title = error.message; });
     window.LuckyBreakAvatar.getCurrentState = () => clone(state); window.LuckyBreakAvatar.getCurrentPNG = () => getAvatarBlob(clone(state), manifest);
   } catch (error) { $('stage-loading').querySelector('strong').textContent = '试衣间载入失败'; $('stage-loading').querySelector('span:last-child').textContent = `${error.message} 请刷新页面。`; toast(error.message); console.error(error); }
 }

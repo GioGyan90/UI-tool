@@ -41,7 +41,23 @@ npm run dev
 
 内搭合成时根据外套轮廓裁去超出的肩袖，保留真正透明的前襟开口。长袖服装只保留基础手掌；头脸、颈部不再使用固定高度裁切。实际绘制顺序为鞋、裤、手臂、内搭后领、外套后领、颈部与锁骨、内搭前领与衣身、外套前领与衣身、头部、发型。后领在颈后，前领在颈前，开领处由独立锁骨补片填满。鞋先画、裤后画，使裤脚盖住鞋口。破洞裤的封闭孔洞补入肤色，避免透出房间。换色按各素材亮度中间值保留明暗，允许将深色西裤染成浅紫色。
 
-旧版六层配置会自动迁移成八层配置（`version: 1, rigVersion: 2`），将原 skin 的颜色、显隐、透明度和变换按原中心继承到头部、颈部、手臂；原服装和自定义素材继续保留。
+旧版六层配置会自动迁移成八层配置，将原 skin 的颜色、显隐、透明度和变换按原中心继承到头部、颈部、手臂；原服装和自定义素材继续保留。当前配置为 `version: 1, rigVersion: 3`，旧配置缺少的独立宽高比例默认补为 1。
+
+## 发型、头部与颈部数值校准
+
+左侧直接选择「发型」「头部」「颈部」，在右侧「位置与大小」输入参数。三个部件独立调整；调整头部不会连带移动发型。
+
+| 字段 | 范围及含义 |
+| --- | --- |
+| 水平 X / 垂直 Y | -400～400 原画像素；正值向右 / 向下，支持 0.1 px |
+| 宽度 / 高度 | 50～200%，分别控制横向和纵向比例，支持 0.1% |
+| 整体缩放 | 25～250%，同时放大或缩小两个方向，支持 0.1% |
+
+位置与缩放以各部件原画包围盒中心为基准。配置中 `scale` 是整体缩放，`scaleX` / `scaleY` 是独立宽高倍率；最终宽度为原宽 × `scale` × `scaleX`，高度同理。还原当前图层会将位移归零、三种比例归一。
+
+顶部「保存预设」打开命名预设窗口：输入名称后保存新预设；「我的预设」可以选择并应用已有预设，也可以用当前画面更新所选预设。每份预设是整套造型的独立快照，包含三组校准参数、服装、颜色和自定义素材引用。修改当前造型不会自动覆盖已有命名预设。
+
+命名预设保存在当前浏览器的 IndexedDB 中，每份使用独立记录，不改动原五套概念预设。跨设备备份时先应用某个预设，再导出配置 JSON；在另一浏览器导入后可重新命名保存。配置 JSON 只包含当前这一份造型，不包含整个预设列表。
 
 ## 读取完整人物
 
@@ -63,7 +79,7 @@ npm run dev
 </script>
 ```
 
-在工具页面本身也可以通过 `window.LuckyBreakAvatar.getCurrentState()` 取得当前配置，通过 `getCurrentPNG()` 取得当前完整人物 PNG Blob。SDK 的通用方法包括 `getManifest()`、`createState(manifest, presetId)`、`loadState()`、`saveState(state)`、`renderAvatar(canvas, state)`、`renderLayer(kind,state)`、`renderCompositeLayers(state)`、`getAvatarBlob(state)`、`subscribeAvatar(callback)`、`exportConfig(state)` 与 `importConfig(config)`。
+在工具页面本身也可以通过 `window.LuckyBreakAvatar.getCurrentState()` 取得当前配置，通过 `getCurrentPNG()` 取得当前完整人物 PNG Blob。SDK 的通用方法包括 `getManifest()`、`createState(manifest, presetId)`、`loadState()`、`saveState(state)`、`listSavedPresets()`、`savePreset(state,name,{id,manifest})`、`renderAvatar(canvas, state)`、`renderLayer(kind,state)`、`renderCompositeLayers(state)`、`getAvatarBlob(state)`、`subscribeAvatar(callback)`、`exportConfig(state)` 与 `importConfig(config)`。不传 `id` 时 `savePreset` 新建快照，传入已有 `id` 时更新该预设；它不会同时覆盖当前造型，需要时另调用 `saveState(record.state)`。
 
 `renderLayer()` 返回八个编辑部件中的单件，衣领仍完整；需要复现人物遮挡或自行打包时使用 `renderCompositeLayers()`，它按 `COMPOSITE_ORDER` 返回十张 `{ kind, canvas }`，已拆开前后领。按返回顺序在同尺寸透明画布上叠加即可得到完整人物。
 
@@ -137,5 +153,7 @@ node public/wardrobe/scripts/verify-wardrobe-render.mjs /tmp/wardrobe-render-qa
 2026-11-02 初版验收：TypeScript 检查通过；桌面与 390px 预览目测完成，浏览器自定义 PNG 导入、含自定义 PNG/颜色/位置的 JSON 恢复、跨标签人物同步通过。
 
 2026-11-02 头颈修正版验收：素材检查、5 项配置/迁移/ZIP 测试及 Vite 构建通过。底层渲染器导出五套透明 PNG、20 组内搭/外套领口接触图和礼服十层 ZIP；ZIP CRC 正确，十层重合成与完整人物逐像素一致，前后领合并 alpha 误差不超过 1/255、预乘 RGB 误差不超过 2/255（透明边缘舍入）。颈部移动不影响头部，开领处检测到 3920 个连续肤色像素；白衬衫及礼服肩线朝向通过检查。浏览器已验证八层拆解及颈部独立移动/还原。云浏览器未能捕获 Blob 下载事件；导出内容已在渲染器和 ZIP 层验证。
+
+2026-11-02 数值校准与预设验收：7 项测试通过，包含小数位置及独立宽高的配置恢复、命名快照隔离与更新。像素检查验证发型、头部、颈部横向调整不改变高度，校准后配置恢复及十层合成像素一致。浏览器实际保存三组不同参数，切换概念造型后重新应用，三组字段值全部恢复；另存第二份预设、更新第一份、刷新后应用第二份，第二份仍保留独立参数。
 
 ![20 组领口混搭检查](collar-combinations.png)

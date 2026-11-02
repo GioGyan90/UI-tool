@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import { COMPOSITE_ORDER, createState, normalizeState } from '../avatar-sdk.js';
+import { COMPOSITE_ORDER, createState, normalizeState, createSavedPreset } from '../avatar-sdk.js';
 import { makeZip } from '../zip.js';
 const manifest = JSON.parse(await fs.readFile(new URL('../manifest.json', import.meta.url), 'utf8'));
 test('exported built-in configuration round-trips all five complete outfits', () => {
@@ -37,9 +37,36 @@ test('untrusted config cannot substitute cross-category assets, remote URLs, or 
   input.customAssets = { 'not-a-user-id': { kind: 'hair' }, 'user-good-id': { kind: 'hair', name: '新发型' }, 'user-bad-kind': { kind: 'remote' } };
   const safe = normalizeState(input, manifest);
   assert.equal(safe.layers.hair.id, 'hair-black'); assert.equal(safe.layers.hair.tint, null);
-  assert.equal(safe.layers.hair.x, 0); assert.equal(safe.layers.hair.y, 150); assert.equal(safe.layers.hair.scale, .75); assert.equal(safe.layers.hair.opacity, 1);
+  assert.equal(safe.layers.hair.x, 0); assert.equal(safe.layers.hair.y, 400); assert.equal(safe.layers.hair.scale, .25); assert.equal(safe.layers.hair.opacity, 1);
   assert.deepEqual(Object.keys(safe.customAssets), ['user-good-id']);
   assert.throws(() => normalizeState({ version: 2 }, manifest), /不兼容/);
+});
+test('hair, head and neck fractional positions and independent dimensions survive config round-trip', () => {
+  const state = createState(manifest);
+  for (const kind of ['hair', 'head', 'neck']) Object.assign(state.layers[kind], { x: 23.4, y: -180.5, scale: .65, scaleX: 1.125, scaleY: .835 });
+  const restored = normalizeState(JSON.parse(JSON.stringify(state)), manifest);
+  for (const kind of ['hair', 'head', 'neck']) assert.deepEqual(restored.layers[kind], state.layers[kind]);
+  delete state.layers.head.scaleX; delete state.layers.head.scaleY;
+  assert.equal(normalizeState(state, manifest).layers.head.scaleX, 1);
+  assert.equal(normalizeState(state, manifest).layers.head.scaleY, 1);
+});
+test('named presets are independent snapshots; updating one preserves its identity and other looks', () => {
+  const live = createState(manifest, 'field');
+  Object.assign(live.layers.hair, { x: 6.5, y: -3.2, scaleX: .9, scaleY: 1.08 });
+  Object.assign(live.layers.head, { x: 8.1, y: 4.4, scale: .94 });
+  Object.assign(live.layers.neck, { y: -12.5, scaleX: .83, scaleY: .76 });
+  const first = createSavedPreset(live, '头颈校准 A', manifest);
+  const firstCopy = JSON.stringify(first);
+  live.layers.neck.y = -25.5;
+  const second = createSavedPreset(live, '头颈校准 B', manifest);
+  assert.notEqual(first.id, second.id); assert.equal(JSON.stringify(first), firstCopy);
+  const loaded = normalizeState(JSON.parse(firstCopy).state, manifest);
+  assert.equal(loaded.layers.neck.y, -12.5); assert.equal(loaded.layers.hair.scaleX, .9);
+  assert.equal(loaded.savedPresetId, first.id); assert.equal(loaded.lookName, '头颈校准 A');
+  const updated = createSavedPreset(live, '头颈校准 A 修订', manifest, first);
+  assert.equal(updated.id, first.id); assert.equal(updated.createdAt, first.createdAt);
+  assert.equal(updated.state.layers.neck.y, -25.5); assert.equal(second.name, '头颈校准 B');
+  assert.throws(() => createSavedPreset(live, '  ', manifest), /名称/);
 });
 test('ZIP contains matching local/central metadata, UTF-8 names, sizes and CRC', async () => {
   const blob = await makeZip([{ name: '图层.png', data: new Blob(['hello']) }, { name: 'look.json', data: '{}' }]);

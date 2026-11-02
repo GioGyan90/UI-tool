@@ -49,6 +49,26 @@ const moved=structuredClone(state);moved.layers.neck.y=10;
 assert.deepEqual(pixels(head),pixels(await sdk.renderLayer('head',moved,manifest)));
 function centerY(canvas){const data=pixels(canvas);let sum=0,weight=0;for(let y=0;y<canvas.height;y++)for(let x=0;x<canvas.width;x++){const a=data[(y*canvas.width+x)*4+3];sum+=a*y;weight+=a;}return sum/weight;}
 assert(Math.abs(centerY(await sdk.renderLayer('neck',moved,manifest))-centerY(neck)-10)<1e-5);
+// Numerical calibration must affect pixels independently on both axes and survive export.
+function alphaBounds(canvas){
+  const data=pixels(canvas);let left=canvas.width,top=canvas.height,right=-1,bottom=-1;
+  for(let y=0;y<canvas.height;y++)for(let x=0;x<canvas.width;x++)if(data[(y*canvas.width+x)*4+3]>128){left=Math.min(left,x);top=Math.min(top,y);right=Math.max(right,x);bottom=Math.max(bottom,y);}
+  return {width:right-left+1,height:bottom-top+1};
+}
+const calibrated=sdk.createState(manifest,'field');
+for(const kind of ['hair','head','neck']){
+  const base=alphaBounds(await sdk.renderLayer(kind,calibrated,manifest));
+  const wider=structuredClone(calibrated);wider.layers[kind].scaleX=1.2;
+  const resized=alphaBounds(await sdk.renderLayer(kind,wider,manifest));
+  assert(Math.abs(resized.width/base.width-1.2)<.025,`${kind} width parameter did not resize pixels.`);
+  assert(Math.abs(resized.height-base.height)<=1,`${kind} width changed its height.`);
+  Object.assign(calibrated.layers[kind],{x:5.5,y:-7.2,scale:.95,scaleX:.92,scaleY:.86});
+}
+const restored=sdk.normalizeState(JSON.parse(JSON.stringify(calibrated)),manifest);
+assert.deepEqual(pixels(await sdk.renderAvatar(null,calibrated,manifest)),pixels(await sdk.renderAvatar(null,restored,manifest)),'Calibrated configuration must restore the same exported pixels.');
+const calibratedStack=await sdk.renderCompositeLayers(restored,manifest),calibratedCanvas=sdk.makeCanvas(manifest);
+for(const part of calibratedStack)calibratedCanvas.getContext('2d').drawImage(part.canvas,0,0);
+assert.deepEqual(pixels(calibratedCanvas),pixels(await sdk.renderAvatar(null,restored,manifest)),'Calibrated ten-layer export must match the avatar.');
 const full=pixels(await sdk.renderAvatar(null,state,manifest)),stack=await sdk.renderCompositeLayers(state,manifest),np=pixels(neck),tp=pixels(stack.find(p=>p.kind==='top').canvas),op=pixels(stack.find(p=>p.kind==='outer').canvas);
 let exposed=0;
 for(let y=330;y<415;y++)for(let x=430;x<520;x++){
