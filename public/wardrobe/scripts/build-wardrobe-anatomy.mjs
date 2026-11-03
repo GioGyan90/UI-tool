@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { RIG_ALIGNMENT, fitNeckPixels } from './rig-registration.mjs';
+import { registerTurtleneckCollar } from './turtleneck-collar.mjs';
 const require = createRequire(import.meta.url);
 const sharp = require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES ? path.join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES, 'sharp') : 'sharp');
 const rootDefault = new URL('../', import.meta.url);
@@ -25,6 +26,7 @@ export async function buildAnatomy({root=rootDefault,neckSource}={}) {
   let hasRear=false;
   try { await fs.access(new URL('assets/outer-trench-lining.png',root));hasRear=true; }catch(error){if(error.code!=='ENOENT')throw error;}
   if(hasRear){const{registerRearAssets}=await import('./register-rear-assets.mjs');await registerRearAssets({root});}
+  await registerTurtleneckCollar({root});
   const manifest=JSON.parse(await fs.readFile(new URL('manifest.json',root),'utf8'));
   const original=await sharp(new URL('assets/skin.png',root).pathname).ensureAlpha().raw().toBuffer();
   const source={box:[256,93,452,859],width:452,height:859};
@@ -80,7 +82,7 @@ export async function buildAnatomy({root=rootDefault,neckSource}={}) {
   await sharp(registered,{raw:{width:neckBox[2],height:neckBox[3],channels:4}}).png().toFile(neutralFile.pathname);
   const fitted=Buffer.from(fitNeckPixels(registered,neckBox));
   await sharp(fitted,{raw:{width:neckBox[2],height:neckBox[3],channels:4}}).png().toFile(new URL('assets/neck-base.png',root).pathname);
-  manifest.version='2026-11-03.1';manifest.rigAlignment=RIG_ALIGNMENT;
+  manifest.version='2026-11-03.2';manifest.rigAlignment=RIG_ALIGNMENT;
   manifest.anatomySource={file:'./assets/skin.png',box:source.box};
   manifest.defaults={...manifest.defaults,body:'skin',head:'head-base',neck:'neck-base'};
   const body=manifest.assets.find(a=>a.id==='skin');
@@ -95,7 +97,7 @@ export async function buildAnatomy({root=rootDefault,neckSource}={}) {
   // actual contour, rather than cutting a horizontal strip through front lapels.
   const collars={
     'top-shirt':[150,300,70], 'top-formal':[165,285,55],
-    'top-turtleneck':[165,275,40], 'outer-bomber':[150,305,80],
+    'outer-bomber':[150,305,80],
     'outer-field':[150,290,75], 'outer-trench':[175,295,80],
     'outer-blazer':[185,290,75],
   };
@@ -119,17 +121,6 @@ export async function buildAnatomy({root=rootDefault,neckSource}={}) {
         }
       }
       const file=`./assets/${asset.id}-rear-mask.png`;
-      if(asset.id==='top-turtleneck'){
-        // Follow the original black front lip. Expanding a polygon across this
-        // line erased the ink and left an artificial, stair-stepped cloth edge.
-        expanded.fill(0);
-        const lip=[[169,10],[173,13],[180,17],[190,19],[200,19],[210,19],[220,17],[230,15],[240,13],[250,10],[260,6],[267,3]];
-        for(let x=169;x<=267;x++){
-          const j=Math.max(1,lip.findIndex((p,i)=>i>0&&x<=p[0])),a=lip[j-1],b=lip[j];
-          const edge=a[1]+(x-a[0])/(b[0]-a[0])*(b[1]-a[1])-.25;
-          for(let y=0;y<24;y++)expanded[(y*info.width+x)*4+3]=Math.round(Math.max(0,Math.min(1,edge-y+.5))*255);
-        }
-      }
       if(asset.id==='top-formal'&&hasRear){
         // At the widened nape corner, the grey inner band is connected to the
         // front fold, so alpha alone cannot identify it as a rear surface.
@@ -146,7 +137,7 @@ export async function buildAnatomy({root=rootDefault,neckSource}={}) {
           for(let y=0;y<end;y++)expanded[(y*info.width+x)*4+3]=Math.max(expanded[(y*info.width+x)*4+3],Math.round(Math.max(0,Math.min(1,edge-y+.5))*255));
         }
       }
-      await sharp(expanded,{raw:info}).blur(asset.id==='top-turtleneck'?.3:.6).png().toFile(new URL(file,root).pathname);
+      await sharp(expanded,{raw:info}).blur(.6).png().toFile(new URL(file,root).pathname);
       asset.rearCollar={file};
     }
     if(asset.id==='top-shirt')asset.mirrorX=true;

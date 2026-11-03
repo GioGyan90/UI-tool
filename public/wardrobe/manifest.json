@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-03.1",
+  "version": "2026-11-03.2",
   "width": 948,
   "height": 1659,
   "characterBounds": [
@@ -190,7 +190,7 @@
       "id": "top-turtleneck",
       "kind": "top",
       "name": "酒红高领针织",
-      "file": "./assets/top-turtleneck.png",
+      "file": "./assets/top-turtleneck-v2.png",
       "box": [
         256,
         268,
@@ -199,8 +199,15 @@
       ],
       "sleeve": "long",
       "facing": "right-three-quarter",
-      "rearCollar": {
-        "file": "./assets/top-turtleneck-rear-mask.png"
+      "sourceFile": "./assets/top-turtleneck.png",
+      "collarSource": {
+        "file": "./assets/top-turtleneck-collar-source.png",
+        "box": [
+          148,
+          0,
+          165,
+          115
+        ]
       }
     },
     {

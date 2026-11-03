@@ -85,6 +85,23 @@ await fs.writeFile(path.join(output,'rear-layer-demo.png'),rearResult.toBuffer('
 const rearStack=await sdk.renderCompositeLayers(rearLook,manifest),joinedRear=sdk.makeCanvas(manifest);
 for(const part of rearStack)joinedRear.getContext('2d').drawImage(part.canvas,0,0);
 assert.deepEqual(pixels(joinedRear),withPixels,'Nonempty rear pieces must survive the exported paint stack.');
+// A closed collar must keep its curved near rim in front of the neck, without
+// the head's short neck overlap cutting through the cloth at the throat.
+const highTop=pixels(rearStack.find(p=>p.kind==='top').canvas),highRear=pixels(rearStack.find(p=>p.kind==='top-collar-back').canvas);
+const highHead=pixels(rearStack.find(p=>p.kind==='head').canvas),highNeck=pixels(rearStack.find(p=>p.kind==='neck').canvas);
+const rimSamples=[[185,28],[200,35],[225,40],[240,39],[255,35]];
+assert(!manifest.assets.find(a=>a.id==='top-turtleneck').rearCollar&&!highRear.some((v,i)=>i%4===3&&v),'The high collar must not expose a rear part.');
+for(const[x,y]of rimSamples){
+  const i=((268+y)*manifest.width+256+x)*4;
+  assert(highTop[i+3]>230&&highRear[i+3]<10,'The visible collar band must remain in the front garment.');
+  assert(highNeck[i+3]>200&&highHead[i+3]<2,'The neck should meet the inside of the collar without head pixels cutting its rim.');
+  const a=highTop[i+3]/255;
+  for(let c=0;c<3;c++)assert(Math.abs(withPixels[i+c]-(highTop[i+c]*a+highNeck[i+c]*(1-a)))<=3,'Neck skin painted over the front collar band.');
+}
+const collarJoined=sdk.makeCanvas(manifest),collarContext=collarJoined.getContext('2d');
+collarContext.drawImage(rearStack.find(p=>p.kind==='top-collar-back').canvas,0,0);collarContext.drawImage(rearStack.find(p=>p.kind==='top').canvas,0,0);
+const collarDelta=difference(pixels(collarJoined),pixels(await sdk.renderLayer('top',rearLook,manifest)));
+assert(collarDelta.alpha<=1&&collarDelta.rgb<=2,'The new collar split must preserve the edited garment.');
 const rearFiles=await Promise.all(rearStack.map(async({kind,canvas},index)=>({name:`layers/${String(index).padStart(2,'0')}-${kind}.png`,data:await sdk.canvasBlob(canvas)})));
 rearFiles.push({name:'character.png',data:await sdk.canvasBlob(rearResult)});
 await fs.writeFile(path.join(output,'rear-layered.zip'),Buffer.from(await(await makeZip(rearFiles)).arrayBuffer()));
@@ -131,6 +148,17 @@ for(let row=0;row<tops.length;row++)for(let col=0;col<outers.length;col++){
 await fs.writeFile(path.join(output,'collar-combinations.png'),atlas.toBuffer('image/png'));
 // Splitting an existing hairstyle or coat must preserve its source pixels.
 const root=new URL('../',import.meta.url),raw=async file=>sharp(new URL(file,root).pathname).ensureAlpha().raw().toBuffer();
+const[oldKnit,newKnit]=await Promise.all(['assets/top-turtleneck.png','assets/top-turtleneck-v2.png'].map(raw));
+const rimY=x=>{for(let y=0;y<90;y++)if(newKnit[(y*452+x)*4+3]>128)return y;return Infinity;};
+for(let dx=0;dx<=52;dx++){
+  assert(Math.abs(rimY(227-dx)-rimY(227+dx))<=1,'The collar opening must be left-right symmetric.');
+  for(const x of [227-dx,227+dx])for(let y=0;y<rimY(x)-2;y++)assert(newKnit[(y*452+x)*4+3]<8,'No rear rim or dark interior may appear above the front collar edge.');
+}
+assert(rimY(227)>rimY(177)+15&&rimY(227)>rimY(277)+15,'The front collar must have one continuous shallow U-shaped edge.');
+for(let y=0;y<596;y++)for(let x=0;x<452;x++)if(x<148||x>=313||y>=115){
+  const i=(y*452+x)*4;
+  assert.deepEqual(newKnit.subarray(i,i+4),oldKnit.subarray(i,i+4),'The collar edit changed the original shirt outside the neck patch.');
+}
 async function checkSourceSplit(originalFile,frontFile,backFile){
   const[source,front,back]=await Promise.all([originalFile,frontFile,backFile].map(raw)),joined=Buffer.alloc(source.length);
   let rearCount=0;
@@ -172,4 +200,4 @@ for(let y=980;y<1190;y++)for(let x=249;x<724;x++){
   }
 }
 assert(hemSides.every(count=>count>500),'Check both extracted inner facings where they overlap the trousers.');
-console.log(`PASS: 5 presets, 20 garment combinations, 12 export layers, original hair/coat split preservation, ${hemChecks} leg-over-facing pixels, anchored neck registration, rear occlusion/link/unlink, ${exposedRear} exposed rear pixels, collar alpha preservation, independent calibration, ${exposed} filled open-collar pixels, right-facing shoulders.`);
+console.log(`PASS: 5 presets, 20 garment combinations, 12 export layers, original hair/coat split preservation, ${hemChecks} leg-over-facing pixels, anchored neck registration, curved turtleneck rim in front of skin, unchanged shirt outside neck patch, rear occlusion/link/unlink, ${exposedRear} exposed rear pixels, collar alpha preservation, independent calibration, ${exposed} filled open-collar pixels, right-facing shoulders.`);

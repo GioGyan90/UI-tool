@@ -84,7 +84,7 @@ export async function registerRearAssets({root=defaultRoot,formalSource,liningSo
   add({id:'outer-trench-lining',kind:'outer-back',name:'风衣内侧与后衬',file:'./assets/outer-trench-back.png',box:[249,274,475,920],clipToParent:true,facing:'right-three-quarter'});
   manifest.slots['hair-back']=manifest.slots.hair;manifest.slots['outer-back']=[249,274,475,920];
   Object.assign(manifest.defaults,{'hair-back':'hair-back-none','outer-back':'outer-back-none'});
-  manifest.version='2026-11-03.1';manifest.rigAlignment=RIG_ALIGNMENT;
+  manifest.version='2026-11-03.2';manifest.rigAlignment=RIG_ALIGNMENT;
   await fs.writeFile(new URL('manifest.json',root),JSON.stringify(manifest,null,2)+'\n');
   console.log('Split both original short hairstyles and trench inner facings; registered rear pieces.');
 }
