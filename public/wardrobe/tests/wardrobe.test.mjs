@@ -42,8 +42,8 @@ test('older eight-layer looks gain the correct paired rear pieces without resett
   const independent=structuredClone(updated);Object.assign(independent.layers['hair-back'],{followParent:false,x:42.5,scaleX:1.12});
   assert.deepEqual(normalizeState(independent,manifest),independent);
 });
-test('original short styles gain their own rear hair and retired long-hair presets migrate',()=>{
-  for(const id of ['hair-black','hair-blonde']){
+test('short styles gain their own rear hair and retired long-hair presets migrate',()=>{
+  for(const id of ['hair-black','hair-blonde','hair-slickback']){
     const old=createState(manifest);old.rigVersion=4;old.layers.hair.id=id;old.layers['hair-back'].id='hair-back-none';
     Object.assign(old.layers.hair,{x:6.2,y:-3.5,scaleX:.94});old.layers.head.y=-2.1;old.layers.neck.scaleY=.91;
     const next=normalizeState(old,manifest);

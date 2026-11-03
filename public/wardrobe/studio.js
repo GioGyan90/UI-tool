@@ -1,4 +1,4 @@
-import { CATEGORIES, CALIBRATION_KINDS, BACK_PARENTS, DRAW_ORDER, STATE_KEY, getManifest, createState, normalizeState, loadState, saveState, listSavedPresets, savePreset, renderAvatar, renderLayer, selectedAsset, canvasBlob, getAvatarBlob, renderCompositeLayers, importAsset, exportConfig, importConfig } from './avatar-sdk.js?v=20261103-collar2';
+import { CATEGORIES, CALIBRATION_KINDS, BACK_PARENTS, DRAW_ORDER, STATE_KEY, getManifest, createState, normalizeState, loadState, saveState, listSavedPresets, savePreset, renderAvatar, renderLayer, selectedAsset, canvasBlob, getAvatarBlob, renderCompositeLayers, importAsset, exportConfig, importConfig } from './avatar-sdk.js?v=20261103-slickback3';
 import { makeZip } from './zip.js';
 import { icon, iconize } from './icons.js';
 const labels = { hair: '发型', 'hair-back':'后发', 'outer-back':'后衬', top: '内搭', outer: '外套', pants: '裤装', shoes: '鞋履', body: '手臂', head: '头部', neck: '颈部' };

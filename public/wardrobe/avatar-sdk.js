@@ -18,7 +18,7 @@ const number = (v, fallback, min, max) => Number.isFinite(Number(v)) ? Math.min(
 const copy = value => JSON.parse(JSON.stringify(value));
 
 export async function getManifest() {
-  manifestPromise ||= fetch(new URL('./manifest.json?v=20261103-collar2', import.meta.url)).then(response => {
+  manifestPromise ||= fetch(new URL('./manifest.json?v=20261103-slickback3', import.meta.url)).then(response => {
     if (!response.ok) throw new Error('素材清单读取失败，请刷新重试。');
     return response.json();
   }).catch(error => { manifestPromise = undefined; throw error; });

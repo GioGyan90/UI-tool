@@ -49,21 +49,25 @@ export async function registerRearAssets({root=defaultRoot,formalSource,liningSo
   const formal=manifest.assets.find(a=>a.id==='top-formal');
   Object.assign(formal,{file:'./assets/top-formal-v2.png',mirrorX:false});delete formal.collarFit;
   const skin=await sharp(new URL('assets/skin.png',root).pathname).ensureAlpha().raw().toBuffer();
-  const hairSources=[['hair-black',[373,53,219,228],'黑色原发型后发'],['hair-blonde',[369,49,229,239],'金色原发型后发']];
+  const hairSources=[['hair-black',[373,53,219,228],'黑色原发型后发'],['hair-blonde',[369,49,229,239],'金色原发型后发'],['hair-slickback',[387,60,180,154],'背头短后发']];
   for(const[id,box,name]of hairSources){
     const sourceFile=`./assets/${id}.png`,{data,info}=await sharp(new URL(sourceFile,root).pathname).ensureAlpha().raw().toBuffer({resolveWithObject:true});
-    const pathData=`M365 100 C388 80 417 70 441 75 C443 113 428 150 420 178 C419 206 429 231 441 255 L443 296 H360 Z M563 169 C588 185 599 220 574 257 L550 296 H606 V160 Z`;
+    const slick=id==='hair-slickback';
+    const pathData=slick?'M380 112 H418 V233 H380 Z':`M365 100 C388 80 417 70 441 75 C443 113 428 150 420 178 C419 206 429 231 441 255 L443 296 H360 Z M563 169 C588 185 599 220 574 257 L550 296 H606 V160 Z`;
     const mask=await sharp(Buffer.from(`<svg width="${info.width}" height="${info.height}" viewBox="${box.join(' ')}"><path d="${pathData}" fill="white"/></svg>`)).ensureAlpha().raw().toBuffer();
+    const ear=slick?await sharp(Buffer.from(`<svg width="${info.width}" height="${info.height}" viewBox="${box.join(' ')}"><path d="M398 173 C411 171 425 186 427 199 L425 218 H399 Z" fill="white"/></svg>`)).ensureAlpha().raw().toBuffer():null;
     for(let y=0;y<info.height;y++)for(let x=0;x<info.width;x++){
       const gx=x+box[0],gy=y+box[1],i=(y*info.width+x)*4,sx=gx-256,sy=gy-93;
       const headAlpha=sx>=0&&sx<452&&sy>=0&&sy<859?skin[(sy*452+sx)*4+3]/255:0;
       const nape=Math.max(0,Math.min(1,(gy-215)/20));
       mask[i+3]=Math.round(mask[i+3]*(1-headAlpha*(1-nape)));
+      if(ear)mask[i+3]=Math.max(mask[i+3],ear[i+3]);
     }
     const pieces=partition(data,mask);
     for(const[part,pixels]of Object.entries(pieces))await sharp(pixels,{raw:info}).png().toFile(new URL(`assets/${id}-${part}.png`,root).pathname);
-    const aligned=[box[0]+RIG_ALIGNMENT.x,box[1]+RIG_ALIGNMENT.y,box[2],box[3]],asset=manifest.assets.find(a=>a.id===id);
+    const aligned=[box[0]+RIG_ALIGNMENT.x,box[1]+RIG_ALIGNMENT.y,box[2],box[3]],asset=manifest.assets.find(a=>a.id===id)||{id,kind:'hair',name:'利落背头',facing:'right-three-quarter'};
     Object.assign(asset,{file:`./assets/${id}-front.png`,sourceFile,box:aligned,backAsset:`${id}-back`});delete asset.thumbBox;
+    add(asset);
     add({id:`${id}-back`,kind:'hair-back',name,file:`./assets/${id}-back.png`,box:aligned,sourceFile,facing:'right-three-quarter'});
   }
   // The two dark lower facings are inner surfaces. Partition the ORIGINAL coat
@@ -84,7 +88,7 @@ export async function registerRearAssets({root=defaultRoot,formalSource,liningSo
   add({id:'outer-trench-lining',kind:'outer-back',name:'风衣内侧与后衬',file:'./assets/outer-trench-back.png',box:[249,274,475,920],clipToParent:true,facing:'right-three-quarter'});
   manifest.slots['hair-back']=manifest.slots.hair;manifest.slots['outer-back']=[249,274,475,920];
   Object.assign(manifest.defaults,{'hair-back':'hair-back-none','outer-back':'outer-back-none'});
-  manifest.version='2026-11-03.2';manifest.rigAlignment=RIG_ALIGNMENT;
+  manifest.version='2026-11-03.3';manifest.rigAlignment=RIG_ALIGNMENT;
   await fs.writeFile(new URL('manifest.json',root),JSON.stringify(manifest,null,2)+'\n');
   console.log('Split both original short hairstyles and trench inner facings; registered rear pieces.');
 }

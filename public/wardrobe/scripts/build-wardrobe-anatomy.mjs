@@ -34,10 +34,17 @@ export async function buildAnatomy({root=rootDefault,neckSource}={}) {
   for(let y=0;y<source.height;y++) for(let x=0;x<source.width;x++) {
     const i=(y*source.width+x)*4,gx=x+256,gy=y+93;
     if(gy<490) arms.fill(0,i,i+4);
-    if(gy>jawAt(gx)+7 || gy>=400 || gx<398 || gx>562) head.fill(0,i,i+4);
+    // The neck has its own matching jaw pixels. Keeping a seven-pixel skin
+    // strip on the head made that strip paint over closed collars.
+    const jawCoverage=Math.max(0,Math.min(1,jawAt(gx)+2-gy));
+    head[i+3]=Math.round(head[i+3]*jawCoverage);
+    if(gy>=400 || gx<398 || gx>562) head.fill(0,i,i+4);
   }
   const armsBox=await saveCrop(arms,452,859,'assets/skin-arms.png',[256,93],root);
-  const headBox=await saveCrop(head,452,859,'assets/head-base.png',[256+RIG_ALIGNMENT.x,93+RIG_ALIGNMENT.y],root);
+  // Keep the existing edit pivot and saved transforms even after removing
+  // the neck overlap; transparent padding is intentional.
+  const headBox=[400+RIG_ALIGNMENT.x,93+RIG_ALIGNMENT.y,160,190];
+  await sharp(head,{raw:{width:452,height:859,channels:4}}).extract({left:144,top:0,width:160,height:190}).png().toFile(new URL('assets/head-base.png',root).pathname);
   const neckBox=[383,218,191,245];
   const neutralFile=new URL('assets/neck-neutral.png',root);
   if(neckSource) {
@@ -82,7 +89,7 @@ export async function buildAnatomy({root=rootDefault,neckSource}={}) {
   await sharp(registered,{raw:{width:neckBox[2],height:neckBox[3],channels:4}}).png().toFile(neutralFile.pathname);
   const fitted=Buffer.from(fitNeckPixels(registered,neckBox));
   await sharp(fitted,{raw:{width:neckBox[2],height:neckBox[3],channels:4}}).png().toFile(new URL('assets/neck-base.png',root).pathname);
-  manifest.version='2026-11-03.2';manifest.rigAlignment=RIG_ALIGNMENT;
+  manifest.version='2026-11-03.3';manifest.rigAlignment=RIG_ALIGNMENT;
   manifest.anatomySource={file:'./assets/skin.png',box:source.box};
   manifest.defaults={...manifest.defaults,body:'skin',head:'head-base',neck:'neck-base'};
   const body=manifest.assets.find(a=>a.id==='skin');

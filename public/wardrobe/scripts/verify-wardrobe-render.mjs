@@ -89,7 +89,7 @@ assert.deepEqual(pixels(joinedRear),withPixels,'Nonempty rear pieces must surviv
 // the head's short neck overlap cutting through the cloth at the throat.
 const highTop=pixels(rearStack.find(p=>p.kind==='top').canvas),highRear=pixels(rearStack.find(p=>p.kind==='top-collar-back').canvas);
 const highHead=pixels(rearStack.find(p=>p.kind==='head').canvas),highNeck=pixels(rearStack.find(p=>p.kind==='neck').canvas);
-const rimSamples=[[185,28],[200,35],[225,40],[240,39],[255,35]];
+const rimSamples=[[185,28],[200,35],[225,40],[240,39],[255,35],[272,22]];
 assert(!manifest.assets.find(a=>a.id==='top-turtleneck').rearCollar&&!highRear.some((v,i)=>i%4===3&&v),'The high collar must not expose a rear part.');
 for(const[x,y]of rimSamples){
   const i=((268+y)*manifest.width+256+x)*4;
@@ -150,14 +150,20 @@ await fs.writeFile(path.join(output,'collar-combinations.png'),atlas.toBuffer('i
 const root=new URL('../',import.meta.url),raw=async file=>sharp(new URL(file,root).pathname).ensureAlpha().raw().toBuffer();
 const[oldKnit,newKnit]=await Promise.all(['assets/top-turtleneck.png','assets/top-turtleneck-v2.png'].map(raw));
 const rimY=x=>{for(let y=0;y<90;y++)if(newKnit[(y*452+x)*4+3]>128)return y;return Infinity;};
-for(let dx=0;dx<=52;dx++){
-  assert(Math.abs(rimY(227-dx)-rimY(227+dx))<=1,'The collar opening must be left-right symmetric.');
-  for(const x of [227-dx,227+dx])for(let y=0;y<rimY(x)-2;y++)assert(newKnit[(y*452+x)*4+3]<8,'No rear rim or dark interior may appear above the front collar edge.');
+for(let dx=0;dx<=48;dx++){
+  assert(Math.abs(rimY(223-dx)-rimY(223+dx))<=1,'The collar opening must be left-right symmetric.');
+  for(const x of [223-dx,223+dx])for(let y=0;y<rimY(x)-2;y++)assert(newKnit[(y*452+x)*4+3]<8,'No rear rim or dark interior may appear above the front collar edge.');
 }
-assert(rimY(227)>rimY(177)+15&&rimY(227)>rimY(277)+15,'The front collar must have one continuous shallow U-shaped edge.');
+assert(rimY(223)>rimY(175)+12&&rimY(223)>rimY(271)+12,'The front collar must have one continuous shallow U-shaped edge.');
+const neckSides=[];
+for(let x=383;x<574;x++)if(highNeck[(294*manifest.width+x)*4+3]>128)neckSides.push(x);
+assert(Math.abs((neckSides[0]+neckSides.at(-1))/2-(256+223))<=2,'The symmetric collar must be centered on the actual neck, not the shirt canvas.');
 for(let y=0;y<596;y++)for(let x=0;x<452;x++)if(x<148||x>=313||y>=115){
   const i=(y*452+x)*4;
   assert.deepEqual(newKnit.subarray(i,i+4),oldKnit.subarray(i,i+4),'The collar edit changed the original shirt outside the neck patch.');
+}
+for(let y=60;y<115;y++)for(let x=148;x<313;x++){
+  const i=(y*452+x)*4;assert.equal(newKnit[i+3],oldKnit[i+3],'The neckline patch must not leave transparent seams in the shoulders or chest.');
 }
 async function checkSourceSplit(originalFile,frontFile,backFile){
   const[source,front,back]=await Promise.all([originalFile,frontFile,backFile].map(raw)),joined=Buffer.alloc(source.length);
@@ -170,10 +176,28 @@ async function checkSourceSplit(originalFile,frontFile,backFile){
   const delta=difference(joined,source);assert(delta.alpha<=1&&delta.rgb<=2,`${frontFile} changed original art: ${JSON.stringify(delta)}`);
   assert(rearCount>500,`${backFile} must contain an actual rear section.`);
 }
-for(const id of ['hair-black','hair-blonde']){
+for(const id of ['hair-black','hair-blonde','hair-slickback']){
   await checkSourceSplit(`assets/${id}.png`,`assets/${id}-front.png`,`assets/${id}-back.png`);
   const front=manifest.assets.find(a=>a.id===id),rear=manifest.assets.find(a=>a.id===id+'-back');
   assert.deepEqual(front.box,rear.box);assert(rear.box[1]+rear.box[3]<310,'Original short hair must not gain a long extension.');
+}
+// The new haircut has a clear forehead and a cropped rear; it must work with
+// all existing outfits and retain the same twelve exported paint layers.
+for(const preset of manifest.presets){
+  const look=sdk.createState(manifest,preset.id);look.layers.hair.id='hair-slickback';look.layers['hair-back'].id='hair-slickback-back';
+  const stack=await sdk.renderCompositeLayers(look,manifest),avatar=sdk.makeCanvas(manifest);
+  for(const part of stack)avatar.getContext('2d').drawImage(part.canvas,0,0);
+  assert.equal(stack.length,12);
+  await fs.writeFile(path.join(output,`slickback-${preset.id}.png`),avatar.toBuffer('image/png'));
+  const forehead=pixels(stack.find(p=>p.kind==='hair').canvas);
+  for(const[x,y]of[[490,157],[505,169]])assert(forehead[(y*manifest.width+x)*4+3]<2,'Swept-back hair must not add bangs over the forehead.');
+  assert(manifest.assets.find(a=>a.id==='hair-slickback-back').box[1]+154<=225,'The short nape must end above the neck and collar.');
+  if(preset.id==='trench'){
+    const files=await Promise.all(stack.map(async({kind,canvas},index)=>({name:`layers/${String(index).padStart(2,'0')}-${kind}.png`,data:await sdk.canvasBlob(canvas)})));
+    files.push({name:'character.png',data:await sdk.canvasBlob(avatar)});
+    await fs.writeFile(path.join(output,'slickback-layered.zip'),Buffer.from(await(await makeZip(files)).arrayBuffer()));
+    assert.deepEqual(pixels(avatar),pixels(await sdk.renderAvatar(null,look,manifest)),'Slicked-back export layers must reproduce the full avatar.');
+  }
 }
 await checkSourceSplit('assets/outer-trench.png','assets/outer-trench-front.png','assets/outer-trench-inner.png');
 const neckNeutral=await raw('assets/neck-neutral.png'),neckFitted=await raw('assets/neck-base.png'),neckBox=manifest.slots.neck;
@@ -200,4 +224,4 @@ for(let y=980;y<1190;y++)for(let x=249;x<724;x++){
   }
 }
 assert(hemSides.every(count=>count>500),'Check both extracted inner facings where they overlap the trousers.');
-console.log(`PASS: 5 presets, 20 garment combinations, 12 export layers, original hair/coat split preservation, ${hemChecks} leg-over-facing pixels, anchored neck registration, curved turtleneck rim in front of skin, unchanged shirt outside neck patch, rear occlusion/link/unlink, ${exposedRear} exposed rear pixels, collar alpha preservation, independent calibration, ${exposed} filled open-collar pixels, right-facing shoulders.`);
+console.log(`PASS: 5 presets, slicked-back hair in all 5 outfits, 20 garment combinations, 12 export layers, three hair/coat split preservation, ${hemChecks} leg-over-facing pixels, anchored neck registration, centered curved turtleneck rim in front of skin, unchanged shirt outside neck patch, rear occlusion/link/unlink, ${exposedRear} exposed rear pixels, collar alpha preservation, independent calibration, ${exposed} filled open-collar pixels, right-facing shoulders.`);

@@ -15,8 +15,15 @@ export async function registerTurtleneckCollar({root=rootDefault}={}) {
     // at the cloth join. Never redraw the shoulders, sleeves, chest or waist.
     const weight=Math.max(0,Math.min(1,x/8,(width-1-x)/8,(height-1-y)/25));
     const i=((top+y)*info.width+left+x)*4,j=(y*width+x)*4;
-    const a=data[i+3]/255,b=source[j+3]/255,alpha=a*(1-weight)+b*weight;
-    for(let c=0;c<3;c++)out[i+c]=alpha?Math.round((data[i+c]*a*(1-weight)+source[j+c]*b*weight)/alpha):0;
+    const a=data[i+3]/255,b=source[j+3]/255,mixed=a*(1-weight)+b*weight;
+    // Only the opening changes the silhouette. Below the collar, retain the
+    // original cloth alpha so the edited patch cannot cut holes at its sides.
+    const protect=Math.max(0,Math.min(1,(y-45)/15)),alpha=mixed*(1-protect)+a*protect;
+    for(let c=0;c<3;c++){
+      const regular=data[i+c]*a*(1-weight)+source[j+c]*b*weight;
+      const protectedColor=data[i+c]*(1-weight*b)+source[j+c]*weight*b;
+      out[i+c]=alpha?Math.round((regular*(1-protect)+protectedColor*a*protect)/alpha):0;
+    }
     out[i+3]=Math.round(alpha*255);
   }
   await sharp(out,{raw:info}).png().toFile(new URL('assets/top-turtleneck-v2.png',root).pathname);

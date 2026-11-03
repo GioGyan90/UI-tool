@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-03.2",
+  "version": "2026-11-03.3",
   "width": 948,
   "height": 1659,
   "characterBounds": [
@@ -439,6 +439,35 @@
         239
       ],
       "sourceFile": "./assets/hair-blonde.png",
+      "facing": "right-three-quarter"
+    },
+    {
+      "id": "hair-slickback",
+      "kind": "hair",
+      "name": "利落背头",
+      "facing": "right-three-quarter",
+      "file": "./assets/hair-slickback-front.png",
+      "sourceFile": "./assets/hair-slickback.png",
+      "box": [
+        387,
+        70,
+        180,
+        154
+      ],
+      "backAsset": "hair-slickback-back"
+    },
+    {
+      "id": "hair-slickback-back",
+      "kind": "hair-back",
+      "name": "背头短后发",
+      "file": "./assets/hair-slickback-back.png",
+      "box": [
+        387,
+        70,
+        180,
+        154
+      ],
+      "sourceFile": "./assets/hair-slickback.png",
       "facing": "right-three-quarter"
     }
   ],
