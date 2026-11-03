@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-02.4",
+  "version": "2026-11-03.1",
   "width": 948,
   "height": 1659,
   "characterBounds": [
@@ -11,7 +11,7 @@
   "slots": {
     "hair": [
       365,
-      45,
+      55,
       240,
       250
     ],
@@ -47,7 +47,7 @@
     ],
     "head": [
       400,
-      93,
+      103,
       160,
       190
     ],
@@ -58,16 +58,16 @@
       245
     ],
     "hair-back": [
-      305,
-      125,
-      320,
-      500
+      365,
+      55,
+      240,
+      250
     ],
     "outer-back": [
-      302,
-      292,
-      366,
-      892
+      249,
+      274,
+      475,
+      920
     ]
   },
   "bodyLongSleeveClips": [
@@ -105,7 +105,7 @@
       "file": "./assets/head-base.png",
       "box": [
         400,
-        93,
+        103,
         160,
         190
       ],
@@ -128,27 +128,31 @@
       "id": "hair-black",
       "kind": "hair",
       "name": "随性中分",
-      "file": "./assets/hair-black.png",
+      "file": "./assets/hair-black-front.png",
       "box": [
         373,
-        53,
+        63,
         219,
         228
       ],
-      "facing": "right-three-quarter"
+      "facing": "right-three-quarter",
+      "sourceFile": "./assets/hair-black.png",
+      "backAsset": "hair-black-back"
     },
     {
       "id": "hair-blonde",
       "kind": "hair",
       "name": "鎏金微卷",
-      "file": "./assets/hair-blonde.png",
+      "file": "./assets/hair-blonde-front.png",
       "box": [
         369,
-        49,
+        59,
         229,
         239
       ],
-      "facing": "right-three-quarter"
+      "facing": "right-three-quarter",
+      "sourceFile": "./assets/hair-blonde.png",
+      "backAsset": "hair-blonde-back"
     },
     {
       "id": "top-tee",
@@ -253,7 +257,7 @@
       "id": "outer-trench",
       "kind": "outer",
       "name": "驼色长风衣",
-      "file": "./assets/outer-trench.png",
+      "file": "./assets/outer-trench-front.png",
       "box": [
         249,
         274,
@@ -264,7 +268,10 @@
       "rearCollar": {
         "file": "./assets/outer-trench-rear-mask.png"
       },
-      "backAsset": "outer-trench-lining"
+      "backAsset": "outer-trench-lining",
+      "sourceFile": "./assets/outer-trench.png",
+      "innerFile": "./assets/outer-trench-inner.png",
+      "facingMask": "./assets/outer-trench-facing-mask.png"
     },
     {
       "id": "outer-blazer",
@@ -360,48 +367,15 @@
       "facing": "right-three-quarter"
     },
     {
-      "id": "hair-blonde-long",
-      "kind": "hair",
-      "name": "鎏金长发",
-      "file": "./assets/hair-blonde.png",
-      "box": [
-        369,
-        49,
-        229,
-        239
-      ],
-      "facing": "right-three-quarter",
-      "backAsset": "hair-long-back",
-      "thumbBox": [
-        305,
-        49,
-        320,
-        576
-      ]
-    },
-    {
       "id": "hair-back-none",
       "kind": "hair-back",
       "name": "无后发",
       "empty": true,
       "box": [
-        305,
-        125,
-        320,
-        500
-      ],
-      "facing": "right-three-quarter"
-    },
-    {
-      "id": "hair-long-back",
-      "kind": "hair-back",
-      "name": "金色长发后束",
-      "file": "./assets/hair-long-back.png",
-      "box": [
-        305,
-        125,
-        320,
-        500
+        365,
+        55,
+        240,
+        250
       ],
       "facing": "right-three-quarter"
     },
@@ -411,25 +385,53 @@
       "name": "无后衬",
       "empty": true,
       "box": [
-        302,
-        292,
-        366,
-        892
+        249,
+        274,
+        475,
+        920
       ],
       "facing": "right-three-quarter"
     },
     {
       "id": "outer-trench-lining",
       "kind": "outer-back",
-      "name": "风衣后背内衬",
-      "file": "./assets/outer-trench-lining.png",
+      "name": "风衣内侧与后衬",
+      "file": "./assets/outer-trench-back.png",
       "box": [
-        302,
-        292,
-        366,
-        892
+        249,
+        274,
+        475,
+        920
       ],
       "clipToParent": true,
+      "facing": "right-three-quarter"
+    },
+    {
+      "id": "hair-black-back",
+      "kind": "hair-back",
+      "name": "黑色原发型后发",
+      "file": "./assets/hair-black-back.png",
+      "box": [
+        373,
+        63,
+        219,
+        228
+      ],
+      "sourceFile": "./assets/hair-black.png",
+      "facing": "right-three-quarter"
+    },
+    {
+      "id": "hair-blonde-back",
+      "kind": "hair-back",
+      "name": "金色原发型后发",
+      "file": "./assets/hair-blonde-back.png",
+      "box": [
+        369,
+        59,
+        229,
+        239
+      ],
+      "sourceFile": "./assets/hair-blonde.png",
       "facing": "right-three-quarter"
     }
   ],
@@ -572,5 +574,11 @@
     "neck": "neck-base",
     "hair-back": "hair-back-none",
     "outer-back": "outer-back-none"
+  },
+  "rigAlignment": {
+    "x": 0,
+    "y": 10,
+    "neckJoinY": 285,
+    "torsoY": 350
   }
 }

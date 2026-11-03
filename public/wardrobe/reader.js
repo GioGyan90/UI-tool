@@ -1,4 +1,4 @@
-import { getManifest, loadState, renderAvatar, subscribeAvatar, getAvatarBlob } from './avatar-sdk.js?v=20261102-backlayers1';
+import { getManifest, loadState, renderAvatar, subscribeAvatar, getAvatarBlob } from './avatar-sdk.js?v=20261103-alignment1';
 const $ = id => document.getElementById(id);
 let state, version = 0;
 async function update(next) {

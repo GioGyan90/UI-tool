@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { RIG_ALIGNMENT, fitNeckPixels } from './rig-registration.mjs';
 const require = createRequire(import.meta.url);
 const sharp = require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES ? path.join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES, 'sharp') : 'sharp');
 const rootDefault = new URL('../', import.meta.url);
@@ -22,7 +23,7 @@ async function saveCrop(buffer, width, height, file, origin, root) {
 }
 export async function buildAnatomy({root=rootDefault,neckSource}={}) {
   let hasRear=false;
-  try { await fs.access(new URL('assets/hair-long-back.png',root));hasRear=true; }catch(error){if(error.code!=='ENOENT')throw error;}
+  try { await fs.access(new URL('assets/outer-trench-lining.png',root));hasRear=true; }catch(error){if(error.code!=='ENOENT')throw error;}
   if(hasRear){const{registerRearAssets}=await import('./register-rear-assets.mjs');await registerRearAssets({root});}
   const manifest=JSON.parse(await fs.readFile(new URL('manifest.json',root),'utf8'));
   const original=await sharp(new URL('assets/skin.png',root).pathname).ensureAlpha().raw().toBuffer();
@@ -34,8 +35,9 @@ export async function buildAnatomy({root=rootDefault,neckSource}={}) {
     if(gy>jawAt(gx)+7 || gy>=400 || gx<398 || gx>562) head.fill(0,i,i+4);
   }
   const armsBox=await saveCrop(arms,452,859,'assets/skin-arms.png',[256,93],root);
-  const headBox=await saveCrop(head,452,859,'assets/head-base.png',[256,93],root);
+  const headBox=await saveCrop(head,452,859,'assets/head-base.png',[256+RIG_ALIGNMENT.x,93+RIG_ALIGNMENT.y],root);
   const neckBox=[383,218,191,245];
+  const neutralFile=new URL('assets/neck-neutral.png',root);
   if(neckSource) {
     const {data,info}=await sharp(neckSource).ensureAlpha().raw().toBuffer({resolveWithObject:true});
     for(let i=0;i<data.length;i+=4) if(data[i+3]<64)data.fill(0,i,i+4);
@@ -52,12 +54,17 @@ export async function buildAnatomy({root=rootDefault,neckSource}={}) {
         neck[i+3]=Math.max(neck[i+3],Math.round(old[3]*mix));
       }
     }
-    await sharp(neck,{raw:{width:neckBox[2],height:neckBox[3],channels:4}}).png().toFile(new URL('assets/neck-base.png',root).pathname);
-  } else await fs.access(new URL('assets/neck-base.png',root));
+    await sharp(neck,{raw:{width:neckBox[2],height:neckBox[3],channels:4}}).png().toFile(neutralFile.pathname);
+  } else {
+    // Retain the neutral authoring source. Rebuilding must never shorten an
+    // already fitted runtime neck a second time.
+    try { await fs.access(neutralFile); }
+    catch(error){if(error.code!=='ENOENT')throw error;await fs.copyFile(new URL('assets/neck-base.png',root),neutralFile);}
+  }
   // Keep a vertical nape before the clavicles widen. The generated patch's
   // trapezius rose above several garment shoulders and created skin spikes.
   const contour=[[275,427,529],[292,428,531],[313,428,537],[330,418,548],[350,393,571],[370,383,574],[463,383,574]];
-  const registered=await sharp(new URL('assets/neck-base.png',root).pathname).ensureAlpha().raw().toBuffer();
+  const registered=await sharp(neutralFile.pathname).ensureAlpha().raw().toBuffer();
   for(let y=0;y<neckBox[3];y++){
     const gy=y+neckBox[1];if(gy<contour[0][0])continue;
     const j=contour.findIndex((point,index)=>index>0&&gy<=point[0]);
@@ -70,8 +77,10 @@ export async function buildAnatomy({root=rootDefault,neckSource}={}) {
       registered[i+3]=Math.min(registered[i+3],Math.round(coverage*255));
     }
   }
-  await sharp(registered,{raw:{width:neckBox[2],height:neckBox[3],channels:4}}).png().toFile(new URL('assets/neck-base.png',root).pathname);
-  manifest.version=hasRear?'2026-11-02.4':'2026-11-02.3';
+  await sharp(registered,{raw:{width:neckBox[2],height:neckBox[3],channels:4}}).png().toFile(neutralFile.pathname);
+  const fitted=Buffer.from(fitNeckPixels(registered,neckBox));
+  await sharp(fitted,{raw:{width:neckBox[2],height:neckBox[3],channels:4}}).png().toFile(new URL('assets/neck-base.png',root).pathname);
+  manifest.version='2026-11-03.1';manifest.rigAlignment=RIG_ALIGNMENT;
   manifest.anatomySource={file:'./assets/skin.png',box:source.box};
   manifest.defaults={...manifest.defaults,body:'skin',head:'head-base',neck:'neck-base'};
   const body=manifest.assets.find(a=>a.id==='skin');

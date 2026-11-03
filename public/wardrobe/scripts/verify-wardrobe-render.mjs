@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 const require=createRequire(import.meta.url);
+const sharp=require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES ? path.join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES,'sharp') : 'sharp');
 const {createCanvas,Image}=require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES ? path.join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES,'@napi-rs/canvas') : '@napi-rs/canvas');
 globalThis.document={createElement:()=>{const c=createCanvas(1,1);c.toBlob=callback=>callback(new Blob([c.toBuffer('image/png')],{type:'image/png'}));return c;}};
 class LocalImage extends Image{
@@ -55,13 +56,21 @@ function alphaBounds(canvas){
   for(let y=0;y<canvas.height;y++)for(let x=0;x<canvas.width;x++)if(data[(y*canvas.width+x)*4+3]>128){left=Math.min(left,x);top=Math.min(top,y);right=Math.max(right,x);bottom=Math.max(bottom,y);}
   return {width:right-left+1,height:bottom-top+1};
 }
+function verticalStats(canvas){
+  const data=pixels(canvas);let mass=0,sum=0,squared=0;
+  for(let y=0;y<canvas.height;y++)for(let x=0;x<canvas.width;x++){const a=data[(y*canvas.width+x)*4+3];mass+=a;sum+=a*y;squared+=a*y*y;}
+  return{center:sum/mass,spread:Math.sqrt(squared/mass-(sum/mass)**2)};
+}
 const calibrated=sdk.createState(manifest,'field');
 for(const kind of ['hair','head','neck']){
-  const base=alphaBounds(await sdk.renderLayer(kind,calibrated,manifest));
+  const baseCanvas=await sdk.renderLayer(kind,calibrated,manifest),base=alphaBounds(baseCanvas);
   const wider=structuredClone(calibrated);wider.layers[kind].scaleX=1.2;
-  const resized=alphaBounds(await sdk.renderLayer(kind,wider,manifest));
+  const widerCanvas=await sdk.renderLayer(kind,wider,manifest),resized=alphaBounds(widerCanvas);
   assert(Math.abs(resized.width/base.width-1.2)<.025,`${kind} width parameter did not resize pixels.`);
-  assert(Math.abs(resized.height-base.height)<=1,`${kind} width changed its height.`);
+  // A thin split hair tip can cross the 128-alpha threshold after horizontal
+  // resampling. Check the vertical mass distribution instead of that one tip.
+  const beforeY=verticalStats(baseCanvas),afterY=verticalStats(widerCanvas);
+  assert(Math.abs(beforeY.center-afterY.center)<.1&&Math.abs(beforeY.spread-afterY.spread)<.1,`${kind} width changed its vertical geometry.`);
   Object.assign(calibrated.layers[kind],{x:5.5,y:-7.2,scale:.95,scaleX:.92,scaleY:.86});
 }
 const restored=sdk.normalizeState(JSON.parse(JSON.stringify(calibrated)),manifest);
@@ -69,7 +78,7 @@ assert.deepEqual(pixels(await sdk.renderAvatar(null,calibrated,manifest)),pixels
 const calibratedStack=await sdk.renderCompositeLayers(restored,manifest),calibratedCanvas=sdk.makeCanvas(manifest);
 for(const part of calibratedStack)calibratedCanvas.getContext('2d').drawImage(part.canvas,0,0);
 assert.deepEqual(pixels(calibratedCanvas),pixels(await sdk.renderAvatar(null,restored,manifest)),'Calibrated export stack must match the avatar.');
-const rearLook=sdk.createState(manifest,'trench');rearLook.layers.hair.id='hair-blonde-long';rearLook.layers['hair-back'].id='hair-long-back';
+const rearLook=sdk.createState(manifest,'trench');
 const withoutRear=structuredClone(rearLook);withoutRear.layers['hair-back'].visible=false;withoutRear.layers['outer-back'].visible=false;
 const rearResult=await sdk.renderAvatar(null,rearLook,manifest),without=pixels(await sdk.renderAvatar(null,withoutRear,manifest)),withPixels=pixels(rearResult);
 await fs.writeFile(path.join(output,'rear-layer-demo.png'),rearResult.toBuffer('image/png'));
@@ -120,4 +129,47 @@ for(let row=0;row<tops.length;row++)for(let col=0;col<outers.length;col++){
   ac.fillStyle='#fffdf5';ac.fillRect(col*220,row*300,220,18);ac.fillStyle='#355044';ac.font='10px sans-serif';ac.fillText(tops[row].id+' / '+outers[col].id,col*220+4,row*300+12);
 }
 await fs.writeFile(path.join(output,'collar-combinations.png'),atlas.toBuffer('image/png'));
-console.log(`PASS: 5 presets, 20 garment combinations, 12 export layers, rear occlusion/link/unlink, ${exposedRear} exposed rear pixels, collar alpha preservation, independent calibration, ${exposed} filled open-collar pixels, right-facing shoulders.`);
+// Splitting an existing hairstyle or coat must preserve its source pixels.
+const root=new URL('../',import.meta.url),raw=async file=>sharp(new URL(file,root).pathname).ensureAlpha().raw().toBuffer();
+async function checkSourceSplit(originalFile,frontFile,backFile){
+  const[source,front,back]=await Promise.all([originalFile,frontFile,backFile].map(raw)),joined=Buffer.alloc(source.length);
+  let rearCount=0;
+  for(let i=0;i<source.length;i+=4){
+    const fa=front[i+3]/255,ba=back[i+3]/255,a=fa+ba*(1-fa);joined[i+3]=Math.round(a*255);
+    if(back[i+3]>128)rearCount++;
+    for(let c=0;c<3;c++)joined[i+c]=a?Math.round((front[i+c]*fa+back[i+c]*ba*(1-fa))/a):0;
+  }
+  const delta=difference(joined,source);assert(delta.alpha<=1&&delta.rgb<=2,`${frontFile} changed original art: ${JSON.stringify(delta)}`);
+  assert(rearCount>500,`${backFile} must contain an actual rear section.`);
+}
+for(const id of ['hair-black','hair-blonde']){
+  await checkSourceSplit(`assets/${id}.png`,`assets/${id}-front.png`,`assets/${id}-back.png`);
+  const front=manifest.assets.find(a=>a.id===id),rear=manifest.assets.find(a=>a.id===id+'-back');
+  assert.deepEqual(front.box,rear.box);assert(rear.box[1]+rear.box[3]<310,'Original short hair must not gain a long extension.');
+}
+await checkSourceSplit('assets/outer-trench.png','assets/outer-trench-front.png','assets/outer-trench-inner.png');
+const neckNeutral=await raw('assets/neck-neutral.png'),neckFitted=await raw('assets/neck-base.png'),neckBox=manifest.slots.neck;
+for(let y=0;y<neckBox[3];y++)for(let x=0;x<neckBox[2];x++){
+  const gy=y+neckBox[1],i=(y*neckBox[2]+x)*4;
+  const sourceY=gy>=350?y:gy>=228&&gy<=295?y-10:null;
+  if(sourceY===null)continue;
+  const j=(sourceY*neckBox[2]+x)*4;
+  assert.equal(neckFitted[i+3],neckNeutral[j+3]);
+  if(neckFitted[i+3])for(let c=0;c<3;c++)assert.equal(neckFitted[i+c],neckNeutral[j+c]);
+}
+const pantsPixels=pixels(await sdk.renderLayer('pants',rearLook,manifest)),coatPixels=pixels(await sdk.renderLayer('outer',rearLook,manifest)),facing=await raw('assets/outer-trench-inner.png');
+const hemReference=sdk.makeCanvas(manifest);
+for(const part of rearStack.slice(0,4))hemReference.getContext('2d').drawImage(part.canvas,0,0);
+const hemExpected=pixels(hemReference);
+let hemChecks=0;const hemSides=[0,0];
+for(let y=980;y<1190;y++)for(let x=249;x<724;x++){
+  const i=(y*manifest.width+x)*4,j=((y-274)*475+x-249)*4;
+  if(facing[j+3]>230&&pantsPixels[i+3]>250&&coatPixels[i+3]<2){
+    hemChecks++;hemSides[x<480?0:1]++;
+    // The source trousers retain 252–254 alpha in their cloth. Compare to the
+    // actual rear-under-trousers composite, including that slight transparency.
+    for(let c=0;c<4;c++)assert(Math.abs(withPixels[i+c]-hemExpected[i+c])<=2,'Inner trench facing painted in front of a trouser leg.');
+  }
+}
+assert(hemSides.every(count=>count>500),'Check both extracted inner facings where they overlap the trousers.');
+console.log(`PASS: 5 presets, 20 garment combinations, 12 export layers, original hair/coat split preservation, ${hemChecks} leg-over-facing pixels, anchored neck registration, rear occlusion/link/unlink, ${exposedRear} exposed rear pixels, collar alpha preservation, independent calibration, ${exposed} filled open-collar pixels, right-facing shoulders.`);

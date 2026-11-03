@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { COMPOSITE_ORDER, createState, normalizeState, createSavedPreset } from '../avatar-sdk.js';
 import { makeZip } from '../zip.js';
+import { fitNeckPixels, RIG_ALIGNMENT } from '../scripts/rig-registration.mjs';
 const manifest = JSON.parse(await fs.readFile(new URL('../manifest.json', import.meta.url), 'utf8'));
 test('exported built-in configuration round-trips all five complete outfits', () => {
   for (const preset of manifest.presets) {
@@ -33,13 +34,40 @@ test('rear collars, neck, front garments and head have an explicit physical orde
   for(const id of ['top-shirt','top-formal'])assert.equal(manifest.assets.find(a=>a.id===id).facing,'right-three-quarter');
 });
 test('older eight-layer looks gain the correct paired rear pieces without resetting manual alignment',()=>{
-  const look=createState(manifest,'trench');look.presetId='custom';look.layers.hair.id='hair-blonde-long';look.layers.neck.y=-17.5;
+  const look=createState(manifest,'trench');look.rigVersion=3;look.presetId='custom';look.layers.neck.y=-17.5;
   delete look.layers['hair-back'];delete look.layers['outer-back'];
   const updated=normalizeState(look,manifest);
-  assert.equal(updated.layers['hair-back'].id,'hair-long-back');assert.equal(updated.layers['outer-back'].id,'outer-trench-lining');
+  assert.equal(updated.layers['hair-back'].id,'hair-blonde-back');assert.equal(updated.layers['outer-back'].id,'outer-trench-lining');
   assert.equal(updated.layers.neck.y,-17.5);assert.equal(updated.layers['hair-back'].followParent,true);
   const independent=structuredClone(updated);Object.assign(independent.layers['hair-back'],{followParent:false,x:42.5,scaleX:1.12});
   assert.deepEqual(normalizeState(independent,manifest),independent);
+});
+test('original short styles gain their own rear hair and retired long-hair presets migrate',()=>{
+  for(const id of ['hair-black','hair-blonde']){
+    const old=createState(manifest);old.rigVersion=4;old.layers.hair.id=id;old.layers['hair-back'].id='hair-back-none';
+    Object.assign(old.layers.hair,{x:6.2,y:-3.5,scaleX:.94});old.layers.head.y=-2.1;old.layers.neck.scaleY=.91;
+    const next=normalizeState(old,manifest);
+    assert.equal(next.layers['hair-back'].id,id+'-back');assert.deepEqual(next.layers.hair,old.layers.hair);
+    assert.equal(next.layers.head.y,-2.1);assert.equal(next.layers.neck.scaleY,.91);
+    next.layers['hair-back'].id='hair-back-none';assert.equal(normalizeState(next,manifest).layers['hair-back'].id,'hair-back-none');
+  }
+  const retired=createState(manifest,'trench');retired.rigVersion=4;
+  retired.layers.hair.id='hair-blonde-long';Object.assign(retired.layers['hair-back'],{id:'hair-long-back',x:80,y:35,scaleY:1.7});
+  const upgraded=normalizeState(retired,manifest);
+  assert.equal(upgraded.layers.hair.id,'hair-blonde');assert.equal(upgraded.layers['hair-back'].id,'hair-blonde-back');
+  assert.equal(upgraded.layers['hair-back'].x,0);assert.equal(upgraded.layers['hair-back'].scaleY,1);
+  assert(!manifest.assets.some(a=>['hair-blonde-long','hair-long-back'].includes(a.id)));
+});
+test('neck registration moves the jaw join with the head while keeping the torso fixed',()=>{
+  const box=[0,218,2,245],source=new Uint8Array(2*245*4);
+  for(let y=0;y<245;y++)for(let x=0;x<2;x++)source.set([y,100,200,255],(y*2+x)*4);
+  const output=fitNeckPixels(source,box);
+  for(let gy=228;gy<=RIG_ALIGNMENT.neckJoinY+RIG_ALIGNMENT.y;gy++){
+    const i=(gy-218)*8,j=(gy-218-RIG_ALIGNMENT.y)*8;assert.deepEqual(output.slice(i,i+8),source.slice(j,j+8));
+  }
+  const torso=(RIG_ALIGNMENT.torsoY-218)*8;assert.deepEqual(output.slice(torso),source.slice(torso));
+  assert.deepEqual(manifest.rigAlignment,RIG_ALIGNMENT);
+  assert.equal(manifest.slots.head[1],103);
 });
 test('untrusted config cannot substitute cross-category assets, remote URLs, or unbounded transforms', () => {
   const input = createState(manifest);

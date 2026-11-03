@@ -18,7 +18,7 @@ const number = (v, fallback, min, max) => Number.isFinite(Number(v)) ? Math.min(
 const copy = value => JSON.parse(JSON.stringify(value));
 
 export async function getManifest() {
-  manifestPromise ||= fetch(new URL('./manifest.json?v=20261102-backlayers1', import.meta.url)).then(response => {
+  manifestPromise ||= fetch(new URL('./manifest.json?v=20261103-alignment1', import.meta.url)).then(response => {
     if (!response.ok) throw new Error('素材清单读取失败，请刷新重试。');
     return response.json();
   }).catch(error => { manifestPromise = undefined; throw error; });
@@ -27,7 +27,7 @@ export async function getManifest() {
 
 export function createState(manifest, presetId = 'night') {
   const preset = manifest.presets.find(item => item.id === presetId) || manifest.presets[0];
-  const state = { version: 1, rigVersion: 4, presetId: preset.id, savedPresetId: null, lookName: null, modifiedAt: new Date().toISOString(), layers: {}, customAssets: {} };
+  const state = { version: 1, rigVersion: 5, presetId: preset.id, savedPresetId: null, lookName: null, modifiedAt: new Date().toISOString(), layers: {}, customAssets: {} };
   for (const kind of LAYER_KINDS) {
     const parent = BACK_PARENTS[kind];
     const paired = parent && manifest.assets.find(a => a.id === state.layers[parent]?.id)?.backAsset;
@@ -52,6 +52,13 @@ export function normalizeState(input, manifest) {
   const legacy = !input.layers.head && !input.layers.neck && input.layers.body;
   for (const kind of LAYER_KINDS) {
     let layer = input.layers[kind] || {};
+    if(kind==='hair'&&layer.id==='hair-blonde-long')layer={...layer,id:'hair-blonde'};
+    if(kind==='hair-back'&&layer.id==='hair-long-back'){
+      // The retired generated long piece has different geometry. Keep its
+      // visibility, but use the original hairstyle's registered rear part.
+      const paired=manifest.assets.find(a=>a.id===state.layers.hair.id)?.backAsset;
+      layer={id:paired||manifest.defaults['hair-back'],visible:layer.visible,opacity:layer.opacity};
+    }
     if (legacy && ['body','head','neck'].includes(kind)) {
       const oldBox = manifest.anatomySource?.box || [256,93,452,859];
       const nextBox = manifest.slots[kind];
@@ -77,7 +84,8 @@ export function normalizeState(input, manifest) {
       visible: layer.visible !== false, fit: layer.fit === 'canvas' ? 'canvas' : 'part',
     };
   }
-  for (const [kind, parent] of Object.entries(BACK_PARENTS)) if (!input.layers[kind]) {
+  for (const [kind, parent] of Object.entries(BACK_PARENTS)) if (!input.layers[kind] ||
+    (kind==='hair-back'&&Number(input.rigVersion||0)<5&&input.layers[kind].id==='hair-back-none')) {
     state.layers[kind].id = manifest.assets.find(a => a.id === state.layers[parent].id)?.backAsset || manifest.defaults[kind];
   }
   return state;
